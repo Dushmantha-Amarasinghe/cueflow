@@ -7,8 +7,9 @@
     "dev": "node scripts/dev.js",
     "build": "electron-vite build",
     "preview": "set ELECTRON_RUN_AS_NODE=0 && electron-vite preview",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "pack": "electron-vite build && electron-builder --dir",
+    "dist": "electron-vite build && electron-builder",
+    "release": "electron-vite build && electron-builder --publish always"
   },
   "dependencies": {
     "electron-updater": "^6.1.7",
