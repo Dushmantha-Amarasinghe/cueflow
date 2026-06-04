@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Mail, MessageCircle, Video, Settings as Cog, Info, Eye, EyeOff, Check, X, FolderOpen, RefreshCw, ExternalLink, Monitor } from 'lucide-react'
+import { Mail, MessageCircle, Video, Settings as Cog, Info, Eye, EyeOff, Check, X, FolderOpen, RefreshCw, ExternalLink, Monitor, Heart, Download } from 'lucide-react'
 import Logo from '../components/Logo'
 
 const TABS = [
@@ -541,36 +541,37 @@ function AboutTab() {
 
   const download = () => window.cueflow?.update?.download(info?.downloadUrl)
 
+  // Always the same button — only the icon (spin) and text/colour change,
+  // so the layout never shifts.
   const UpdateButton = () => {
-    if (updateState === 'checking') return (
-      <span className="flex items-center gap-1.5 text-xs text-zinc-500">
-        <RefreshCw size={11} className="animate-spin" /> Checking…
-      </span>
-    )
-    if (updateState === 'latest') return (
-      <span className="flex items-center gap-1.5 text-xs text-green-400">
-        <Check size={11} /> You're on the latest version
-      </span>
-    )
+    const base = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors'
+    const checking = updateState === 'checking'
+
+    // Found an update → violet download button
     if (updateState === 'available') return (
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-violet-400">v{info?.version} available</span>
-        <button onClick={download}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-xs text-white transition-colors">
-          <ExternalLink size={11} /> Download
-        </button>
-      </div>
-    )
-    if (updateState === 'error') return (
-      <button onClick={checkForUpdates}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-red-400 transition-colors">
-        <RefreshCw size={11} /> Check failed — retry
+      <button onClick={download} className={`${base} bg-violet-600 hover:bg-violet-500 text-white`}>
+        <Download size={11} /> Download v{info?.version}
       </button>
     )
+
+    const tone =
+      updateState === 'latest' ? 'text-green-400' :
+      updateState === 'error'  ? 'text-red-400'   : 'text-zinc-300'
+
+    const icon = updateState === 'latest'
+      ? <Check size={11} />
+      : <RefreshCw size={11} className={checking ? 'animate-spin' : ''} />
+
+    const text =
+      checking                  ? 'Checking…' :
+      updateState === 'latest'  ? "You're on the latest version" :
+      updateState === 'error'   ? 'Check failed — retry' :
+                                  'Check for updates'
+
     return (
-      <button onClick={checkForUpdates}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 transition-colors">
-        <RefreshCw size={11} /> Check for updates
+      <button onClick={checkForUpdates} disabled={checking}
+        className={`${base} bg-zinc-800 hover:bg-zinc-700 disabled:hover:bg-zinc-800 disabled:cursor-default ${tone}`}>
+        {icon} {text}
       </button>
     )
   }
@@ -606,8 +607,8 @@ function AboutTab() {
         </SettingRow>
         <SettingRow label="Support" description="If Cueflow saves you time, consider a donation">
           <button onClick={() => window.cueflow?.shell.openExternal('https://paypal.me/DushmanthaAmarasinghe')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 transition-colors">
-            ❤️ Donate
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 hover:text-pink-400 transition-colors group">
+            <Heart size={11} className="group-hover:fill-pink-400 transition-colors" /> Donate
           </button>
         </SettingRow>
       </CardSection>
