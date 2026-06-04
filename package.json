@@ -2,6 +2,8 @@
   "name": "cueflow",
   "version": "0.1.0",
   "description": "Automated meeting recorder triggered by email",
+  "author": "Dushmantha Amarasinghe",
+  "homepage": "https://github.com/Dushmantha-Amarasinghe/cueflow",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "node scripts/dev.js",
@@ -46,11 +48,23 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "resources/icon.ico"
+      "icon": "resources/icon.ico",
+      "artifactName": "Cueflow-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Cueflow",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "installerHeaderIcon": "resources/icon.ico",
+      "uninstallDisplayName": "Cueflow ${version}"
     },
     "files": [
       "out/**/*"
