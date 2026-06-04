@@ -606,7 +606,7 @@ function AboutTab() {
           </button>
         </SettingRow>
         <SettingRow label="Support" description="If Cueflow saves you time, consider a donation">
-          <button onClick={() => window.cueflow?.shell.openExternal('https://paypal.me/DushmanthaAmarasinghe')}
+          <button onClick={() => window.cueflow?.shell.openExternal('https://www.paypal.com/donate?business=dsbamarasinghe1234@gmail.com&currency_code=USD&amount=5')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 hover:text-pink-400 transition-colors group">
             <Heart size={11} className="group-hover:fill-pink-400 transition-colors" /> Donate
           </button>

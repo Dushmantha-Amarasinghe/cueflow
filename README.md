@@ -121,7 +121,7 @@ Pull requests are welcome. For major changes please open an issue first.
 
 If Cueflow saves you time, consider supporting development:
 
-[![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-blue?style=flat-square&logo=paypal)](https://paypal.me/DushmanthaAmarasinghe)
+[![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-blue?style=flat-square&logo=paypal)](https://www.paypal.com/donate?business=dsbamarasinghe1234@gmail.com&currency_code=USD&amount=5)
 
 ## 📄 License
 

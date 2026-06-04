@@ -62,7 +62,7 @@ export default function Sidebar({ currentPage, onNavigate, status = 'idle', upda
 
         {/* Donate */}
         <button
-          onClick={() => window.cueflow?.shell.openExternal('https://paypal.me/DushmanthaAmarasinghe')}
+          onClick={() => window.cueflow?.shell.openExternal('https://www.paypal.com/donate?business=dsbamarasinghe1234@gmail.com&currency_code=USD&amount=5')}
           className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-zinc-600 hover:text-pink-400 hover:bg-pink-500/8 transition-colors"
         >
           <Heart size={13} />
