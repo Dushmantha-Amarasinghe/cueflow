@@ -1,18 +1,9 @@
-import { app, BrowserWindow, ipcMain, shell, powerSaveBlocker, dialog, Tray, Menu, nativeImage, screen, desktopCapturer } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, powerSaveBlocker, dialog, Tray, Menu, nativeImage, screen, desktopCapturer, net } from 'electron'
 import path from 'path'
 import zlib from 'zlib'
 import { fileURLToPath } from 'url'
 import { exec } from 'child_process'
 import { createRequire } from 'module'
-
-// Auto-updater — only active in packaged builds
-let autoUpdater = null
-try {
-  const { autoUpdater: au } = _require('electron-updater')
-  autoUpdater = au
-  autoUpdater.autoDownload = false   // user-initiated download
-  autoUpdater.logger = null
-} catch { /* ignore — may not resolve in certain dev configurations */ }
 import { store } from './store.js'
 import { encrypt as encryptField, decrypt as decryptField } from './credentials.js'
 import { engine } from './engine/index.js'
@@ -22,6 +13,51 @@ import { startBot, stopBot, wireTelegramToEngine } from './telegram.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const _require   = createRequire(import.meta.url)
 const _ffmpegBin = _require('ffmpeg-static')
+
+// ─── Update checker (GitHub Releases API) ───────────────────────────────────────
+
+const GITHUB_REPO = 'Dushmantha-Amarasinghe/cueflow'
+
+// Compare two semver-ish strings. Returns 1 if a>b, -1 if a<b, 0 if equal.
+function compareVersions(a, b) {
+  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0)
+  const pb = String(b).split('.').map(n => parseInt(n, 10) || 0)
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1
+  }
+  return 0
+}
+
+// Fetch the latest GitHub release and compare to the running version.
+async function checkForUpdate() {
+  try {
+    const res = await net.fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+      headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'Cueflow-Updater' }
+    })
+    if (res.status === 404) return { ok: true, available: false, reason: 'no-releases' }
+    if (!res.ok) return { ok: false, reason: `http-${res.status}` }
+
+    const data    = await res.json()
+    const latest  = (data.tag_name || '').replace(/^v/i, '')
+    const current = app.getVersion()
+    const available = latest && compareVersions(latest, current) > 0
+
+    // Prefer the .exe installer asset; fall back to the release page
+    const exe = (data.assets || []).find(a => /\.exe$/i.test(a.name))
+    return {
+      ok: true,
+      available,
+      version: latest,
+      current,
+      notes: data.body || '',
+      downloadUrl: exe?.browser_download_url || data.html_url,
+      pageUrl: data.html_url
+    }
+  } catch (e) {
+    return { ok: false, reason: e.message }
+  }
+}
 
 // ─── Icon generator ────────────────────────────────────────────────────────────
 
@@ -202,19 +238,16 @@ app.whenReady().then(async () => {
   await engine.start()
   await startBot()
 
-  // Auto-update wiring
-  if (autoUpdater) {
-    autoUpdater.on('update-available',     info => win.webContents.send('update:available',     { version: info.version }))
-    autoUpdater.on('update-not-available', ()   => win.webContents.send('update:not-available'))
-    autoUpdater.on('update-downloaded',    info => win.webContents.send('update:downloaded',    { version: info.version }))
-    autoUpdater.on('error',                ()   => win.webContents.send('update:error'))
-
-    // Auto-check on launch + every 4 hours (packaged builds only)
-    if (app.isPackaged) {
-      autoUpdater.checkForUpdates().catch(() => {})
-      setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000)
+  // Update check: on launch (after a short delay) + every 4 hours.
+  // If a newer release exists, notify the renderer so the sidebar badge shows.
+  const runUpdateCheck = async () => {
+    const r = await checkForUpdate()
+    if (r.ok && r.available) {
+      win.webContents.send('update:available', { version: r.version, downloadUrl: r.downloadUrl, pageUrl: r.pageUrl, notes: r.notes })
     }
   }
+  setTimeout(runUpdateCheck, 8000)
+  setInterval(runUpdateCheck, 4 * 60 * 60 * 1000)
 })
 
 app.on('before-quit', () => { isQuitting = true; engine.stop(); stopBot() })
@@ -411,22 +444,7 @@ function setupIPC(win) {
     path.join(app.getPath('documents'), 'Cueflow', 'Recordings')
   )
 
-  // ── Auto-update controls
-  ipcMain.handle('update:check', async () => {
-    if (!autoUpdater) return { ok: false, reason: 'unavailable' }
-    if (!app.isPackaged) {
-      // Dev mode — updater can't run against a non-installed app. Report "latest"
-      // so the UI doesn't spin forever; real checks happen in packaged builds.
-      win.webContents.send('update:not-available')
-      return { ok: true, dev: true }
-    }
-    try { await autoUpdater.checkForUpdates(); return { ok: true } }
-    catch (e) { return { ok: false, reason: e.message } }
-  })
-  ipcMain.handle('update:download', async () => {
-    if (autoUpdater && app.isPackaged) await autoUpdater.downloadUpdate()
-  })
-  ipcMain.handle('update:install', () => {
-    if (autoUpdater && app.isPackaged) autoUpdater.quitAndInstall(false, true)
-  })
+  // ── Update controls (GitHub Releases)
+  ipcMain.handle('update:check',   () => checkForUpdate())
+  ipcMain.handle('update:download', (_, url) => shell.openExternal(url))
 }

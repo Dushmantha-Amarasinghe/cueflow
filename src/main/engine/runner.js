@@ -1,5 +1,8 @@
 import { shell } from 'electron'
 import { exec } from 'child_process'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
 import { store } from '../store.js'
 import { scheduler } from './scheduler.js'
 import { recorder } from './recorder.js'
@@ -43,9 +46,12 @@ class Runner {
         this._emitter?.emit('recording:error', { task, error: e.message })
       }
 
-      // Auto-fullscreen if enabled
+      // Auto-fullscreen if enabled — retry a few times since the meeting
+      // window can take several seconds to appear after Zoom launches.
       const autoFullscreen = (store.read('settings', {})).recording?.autoFullscreen !== false
-      if (autoFullscreen) setTimeout(() => maximizeMeetingWindow(task.meetingUrl), 3000)
+      if (autoFullscreen) {
+        ;[2000, 5000, 9000].forEach(ms => setTimeout(() => maximizeMeetingWindow(task.meetingUrl), ms))
+      }
 
       // Wait for meeting to end (respects stop() in all modes)
       await this._waitForEnd(task, flow)
@@ -200,16 +206,56 @@ function waitForProcessClose(name, shouldStop = () => false) {
   })
 }
 
+// The maximize logic needs literal double quotes (DllImport("user32.dll")) which
+// don't survive cmd.exe's quoting when passed inline. Write it to a temp .ps1 and
+// run with -File instead — no escaping headaches, supports here-strings.
+const MAXIMIZE_PS1 = path.join(os.tmpdir(), 'cueflow-maximize.ps1')
+let _ps1Written = false
+
+function ensureMaximizeScript() {
+  if (_ps1Written) return
+  const script = `param([string]$Name, [string]$Hint)
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class CueWin {
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+}
+"@
+# SW_MAXIMIZE = 3. Only processes with a real, titled window — skips the
+# launcher/helper processes whose handle is zero or whose title is empty.
+$cands = Get-Process $Name -ErrorAction SilentlyContinue |
+  Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle.Trim() -ne '' }
+# Prefer the actual meeting window (title contains the hint) when present,
+# e.g. "Zoom Meeting" over "Zoom Workplace".
+$preferred = $cands | Where-Object { $_.MainWindowTitle -like ('*' + $Hint + '*') }
+$targets = if ($preferred) { $preferred } else { $cands }
+foreach ($t in $targets) {
+  [CueWin]::ShowWindow($t.MainWindowHandle, 3) | Out-Null
+  [CueWin]::SetForegroundWindow($t.MainWindowHandle) | Out-Null
+}
+`
+  try { fs.writeFileSync(MAXIMIZE_PS1, script, 'utf8'); _ps1Written = true }
+  catch (e) { console.warn('[runner] could not write maximize script:', e.message) }
+}
+
+// Per-platform process + window-title hint for the meeting window
+function meetingTarget(url) {
+  if (/zoom\.us|zoommtg/i.test(url)) return { proc: 'Zoom',     hint: 'Meeting' }
+  if (/teams\.microsoft/i.test(url)) return { proc: 'ms-teams', hint: 'Meeting' }
+  if (/meet\.google/i.test(url))     return { proc: 'chrome',   hint: 'Meet' }
+  return { proc: 'Zoom', hint: 'Meeting' }
+}
+
 function maximizeMeetingWindow(url) {
-  const name = detectProcess(url)
-  const ps = `
-    $proc = Get-Process '${name}' -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($proc) {
-      Add-Type -Name Win32 -Namespace _ -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);'
-      [_+Win32]::ShowWindow($proc.MainWindowHandle, 3)
-    }
-  `
-  exec(`powershell -NoProfile -Command "${ps.replace(/\n/g, ' ')}"`)
+  ensureMaximizeScript()
+  if (!_ps1Written) return
+  const { proc, hint } = meetingTarget(url)
+  exec(
+    `powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${MAXIMIZE_PS1}" "${proc}" "${hint}"`,
+    (err) => { if (err) console.warn('[runner] maximize failed:', err.message) }
+  )
 }
 
 export const runner = new Runner()

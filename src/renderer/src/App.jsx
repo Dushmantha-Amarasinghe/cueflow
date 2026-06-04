@@ -49,11 +49,10 @@ export default function App() {
     return unsub
   }, [])
 
-  // Auto-update events
+  // Update notification (from launch-time check)
   useEffect(() => {
-    const unsubAvail  = window.cueflow?.on.updateAvailable?.(info  => setUpdateInfo({ ...info, downloaded: false }))
-    const unsubDled   = window.cueflow?.on.updateDownloaded?.(info => setUpdateInfo({ ...info, downloaded: true  }))
-    return () => { unsubAvail?.(); unsubDled?.() }
+    const unsub = window.cueflow?.on.updateAvailable?.(info => setUpdateInfo(info))
+    return unsub
   }, [])
 
   if (!ready) return null

@@ -1,5 +1,5 @@
 import React from 'react'
-import { LayoutDashboard, GitBranch, Clock, Settings, Heart, Download, RefreshCw, ArrowDownToLine } from 'lucide-react'
+import { LayoutDashboard, GitBranch, Clock, Settings, Heart, Download } from 'lucide-react'
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -19,12 +19,8 @@ const STATUS = {
 export default function Sidebar({ currentPage, onNavigate, status = 'idle', updateInfo }) {
   const st = STATUS[status] ?? STATUS.idle
 
-  const handleUpdate = async () => {
-    if (updateInfo?.downloaded) {
-      await window.cueflow?.update?.install()
-    } else {
-      await window.cueflow?.update?.download()
-    }
+  const handleUpdate = () => {
+    if (updateInfo?.downloadUrl) window.cueflow?.update?.download(updateInfo.downloadUrl)
   }
 
   return (
@@ -56,15 +52,10 @@ export default function Sidebar({ currentPage, onNavigate, status = 'idle', upda
             onClick={handleUpdate}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-600/15 border border-violet-500/30 hover:bg-violet-600/25 transition-colors text-left"
           >
-            {updateInfo.downloaded
-              ? <ArrowDownToLine size={13} className="text-violet-400 flex-shrink-0" />
-              : <Download size={13} className="text-violet-400 flex-shrink-0" />
-            }
+            <Download size={13} className="text-violet-400 flex-shrink-0" />
             <div className="min-w-0">
-              <p className="text-xs font-medium text-violet-300">
-                {updateInfo.downloaded ? 'Restart to update' : 'Update available'}
-              </p>
-              <p className="text-xs text-violet-500/70">v{updateInfo.version}</p>
+              <p className="text-xs font-medium text-violet-300">Update available</p>
+              <p className="text-xs text-violet-500/70">v{updateInfo.version} — download</p>
             </div>
           </button>
         )}

@@ -123,27 +123,11 @@ contextBridge.exposeInMainWorld('cueflow', {
       const h = (_, info) => cb(info)
       ipcRenderer.on('update:available', h)
       return () => ipcRenderer.removeListener('update:available', h)
-    },
-    updateDownloaded: (cb) => {
-      const h = (_, info) => cb(info)
-      ipcRenderer.on('update:downloaded', h)
-      return () => ipcRenderer.removeListener('update:downloaded', h)
-    },
-    updateNotAvailable: (cb) => {
-      const h = () => cb()
-      ipcRenderer.on('update:not-available', h)
-      return () => ipcRenderer.removeListener('update:not-available', h)
-    },
-    updateError: (cb) => {
-      const h = () => cb()
-      ipcRenderer.on('update:error', h)
-      return () => ipcRenderer.removeListener('update:error', h)
     }
   },
 
   update: {
-    check:    () => ipcRenderer.invoke('update:check'),
-    download: () => ipcRenderer.invoke('update:download'),
-    install:  () => ipcRenderer.invoke('update:install')
+    check:    ()    => ipcRenderer.invoke('update:check'),
+    download: (url) => ipcRenderer.invoke('update:download', url)
   }
 })

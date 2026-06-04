@@ -528,43 +528,20 @@ function GeneralTab({ settings, onSave }) {
 // ─── About tab ─────────────────────────────────────────────────────────────────
 
 function AboutTab() {
-  const [updateState, setUpdateState] = useState('idle') // idle | checking | available | downloaded | latest | error
-  const [updateVersion, setUpdateVersion] = useState(null)
-
-  // Reflect update notifications (may arrive from auto-check too)
-  useEffect(() => {
-    const unsubAvail = window.cueflow?.on.updateAvailable?.(info => {
-      setUpdateVersion(info.version); setUpdateState('available')
-    })
-    const unsubDled = window.cueflow?.on.updateDownloaded?.(info => {
-      setUpdateVersion(info.version); setUpdateState('downloaded')
-    })
-    const unsubNone = window.cueflow?.on.updateNotAvailable?.(() => setUpdateState('latest'))
-    const unsubErr  = window.cueflow?.on.updateError?.(() => setUpdateState('error'))
-    return () => { unsubAvail?.(); unsubDled?.(); unsubNone?.(); unsubErr?.() }
-  }, [])
+  const [updateState, setUpdateState] = useState('idle') // idle | checking | available | latest | error
+  const [info, setInfo] = useState(null)                 // { version, downloadUrl, pageUrl, notes }
 
   const checkForUpdates = async () => {
     setUpdateState('checking')
     const r = await window.cueflow?.update?.check()
-    if (r && !r.ok) setUpdateState('error')
-    // 'available' / 'latest' / 'downloaded' arrive via events above
+    if (!r || !r.ok) { setUpdateState('error'); return }
+    if (r.available) { setInfo(r); setUpdateState('available') }
+    else setUpdateState('latest')
   }
 
-  const downloadUpdate = async () => {
-    setUpdateState('checking')
-    await window.cueflow?.update?.download()
-  }
-
-  const installUpdate = () => window.cueflow?.update?.install()
+  const download = () => window.cueflow?.update?.download(info?.downloadUrl)
 
   const UpdateButton = () => {
-    if (updateState === 'idle') return (
-      <button onClick={checkForUpdates}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 transition-colors">
-        <RefreshCw size={11} /> Check for updates
-      </button>
-    )
     if (updateState === 'checking') return (
       <span className="flex items-center gap-1.5 text-xs text-zinc-500">
         <RefreshCw size={11} className="animate-spin" /> Checking…
@@ -577,24 +554,24 @@ function AboutTab() {
     )
     if (updateState === 'available') return (
       <div className="flex items-center gap-2">
-        <span className="text-xs text-violet-400">v{updateVersion} available</span>
-        <button onClick={downloadUpdate}
+        <span className="text-xs text-violet-400">v{info?.version} available</span>
+        <button onClick={download}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-xs text-white transition-colors">
-          Download
+          <ExternalLink size={11} /> Download
         </button>
       </div>
     )
-    if (updateState === 'downloaded') return (
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-green-400">v{updateVersion} ready</span>
-        <button onClick={installUpdate}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-xs text-white transition-colors">
-          Restart &amp; install
-        </button>
-      </div>
+    if (updateState === 'error') return (
+      <button onClick={checkForUpdates}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-red-400 transition-colors">
+        <RefreshCw size={11} /> Check failed — retry
+      </button>
     )
     return (
-      <span className="text-xs text-red-400">Update check failed</span>
+      <button onClick={checkForUpdates}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 transition-colors">
+        <RefreshCw size={11} /> Check for updates
+      </button>
     )
   }
 
