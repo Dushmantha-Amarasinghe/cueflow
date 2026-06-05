@@ -49,7 +49,7 @@
     "win": {
       "target": "nsis",
       "icon": "resources/icon.ico",
-      "artifactName": "Cueflow-Setup-${version}.${ext}"
+      "artifactName": "Cueflow-Setup.${ext}"
     },
     "nsis": {
       "oneClick": false,

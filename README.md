@@ -11,11 +11,19 @@
 [![License](https://img.shields.io/github/license/Dushmantha-Amarasinghe/cueflow?style=flat-square)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/Dushmantha-Amarasinghe/cueflow?style=flat-square)](https://github.com/Dushmantha-Amarasinghe/cueflow/stargazers)
 
-Cueflow watches your Gmail inbox for meeting invitation emails, extracts the schedule from ICS attachments, then automatically joins and records the meeting — even when you're away from your computer.
+Cueflow watches your Gmail inbox for meeting invitation emails, extracts the schedule from ICS attachments, then automatically joins and records the meeting — even when you're away from your computer. Control everything from Telegram.
 
-[**Download Latest**](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest) · [Report a Bug](https://github.com/Dushmantha-Amarasinghe/cueflow/issues) · [Request a Feature](https://github.com/Dushmantha-Amarasinghe/cueflow/issues)
+### [⬇ Download for Windows](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest/download/Cueflow-Setup.exe) · [🌐 Website](https://dushmantha-amarasinghe.github.io/cueflow/) · [🐛 Report a Bug](https://github.com/Dushmantha-Amarasinghe/cueflow/issues)
+
+<img src="docs/screenshots/dashboard.png" width="760" alt="Cueflow dashboard" />
 
 </div>
+
+---
+
+## 📱 The killer feature: join from your phone
+
+Out at dinner when a lecture starts? **Paste the meeting link to your Telegram bot** — your PC at home opens it and starts recording. When it's done, the recording is sent right back to your chat. Stop, check status, manage flows — all remotely.
 
 ---
 
@@ -33,13 +41,20 @@ Cueflow watches your Gmail inbox for meeting invitation emails, extracts the sch
 
 ## 📥 Download
 
-Head to [**Releases**](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest) and grab the latest `.exe` installer for Windows.
-
-| File | Description |
-|------|-------------|
-| `Cueflow-Setup-x.x.x.exe` | Windows installer (recommended) |
+[**⬇ Download the latest installer**](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest/download/Cueflow-Setup.exe) — ffmpeg is bundled, nothing else to install.
 
 > **Requirements:** Windows 10 / 11 (64-bit). Zoom, Teams, or any meeting app already installed.
+>
+> **Note:** Cueflow isn't code-signed yet, so Windows SmartScreen may warn about an "unknown publisher." Click **More info → Run anyway** — the full source is here if you'd like to verify or build it yourself.
+
+## 🖼️ Screenshots
+
+| | |
+|---|---|
+| ![Dashboard](docs/screenshots/dashboard.png) | ![Flows](docs/screenshots/flows.png) |
+| **Dashboard** — live status & upcoming sessions | **Flows** — your automation pipelines |
+| ![Recording](docs/screenshots/recording.png) | ![Settings](docs/screenshots/settings.png) |
+| **Recording** — screen, resolution, audio | **Settings** — Gmail, Telegram & behaviour |
 
 ## 🚀 Getting started
 
