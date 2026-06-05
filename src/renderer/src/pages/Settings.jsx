@@ -66,6 +66,7 @@ function ConnectionsTab({ settings, onSave }) {
   const [gmailStatus,    setGmailStatus]    = useState(settings.gmail?.email ? 'connected' : null)
   const [gmailError,     setGmailError]     = useState('')
   const [showGmailPwd,   setShowGmailPwd]   = useState(false)
+  const [allowInsecure,  setAllowInsecure]  = useState(settings.gmail?.allowInsecureTLS === true)
 
   const [tgToken,    setTgToken]    = useState(settings.telegram?.botToken || '')
   const [tgChatId,   setTgChatId]   = useState(settings.telegram?.chatId || '')
@@ -79,6 +80,7 @@ function ConnectionsTab({ settings, onSave }) {
     setGmailEmail(settings.gmail?.email || '')
     setGmailPassword(settings.gmail?.password || '')
     setGmailStatus(settings.gmail?.email ? 'connected' : null)
+    setAllowInsecure(settings.gmail?.allowInsecureTLS === true)
     setTgToken(settings.telegram?.botToken || '')
     setTgChatId(settings.telegram?.chatId || '')
     setTgStatus(settings.telegram?.botToken ? 'connected' : null)
@@ -99,14 +101,21 @@ function ConnectionsTab({ settings, onSave }) {
   const handleGmailConnect = async () => {
     if (!gmailEmail || !gmailPassword) { setGmailError('Email and App Password are required'); return }
     setGmailStatus('testing'); setGmailError('')
-    const result = await window.cueflow?.settings.testGmail({ email: gmailEmail, password: gmailPassword })
+    const result = await window.cueflow?.settings.testGmail({ email: gmailEmail, password: gmailPassword, allowInsecureTLS: allowInsecure })
     if (result?.success) {
-      await onSave({ gmail: { email: gmailEmail, password: gmailPassword } })
+      await onSave({ gmail: { email: gmailEmail, password: gmailPassword, allowInsecureTLS: allowInsecure } })
       setGmailStatus('connected')
     } else {
       setGmailStatus('error')
       setGmailError(result?.error || 'Connection failed')
     }
+  }
+
+  // Persist the TLS toggle immediately (also triggers an engine restart so the
+  // change takes effect without needing to re-enter credentials).
+  const toggleInsecure = async (v) => {
+    setAllowInsecure(v)
+    await onSave({ gmail: { allowInsecureTLS: v } })
   }
 
   const handleTgConnect = async () => {
@@ -165,6 +174,9 @@ function ConnectionsTab({ settings, onSave }) {
             <ExternalLink size={11} /> Get App Password
           </button>
         </div>
+        <SettingRow label="Allow insecure TLS" description="Only enable if your antivirus/proxy inspects HTTPS and email checks fail with a certificate error">
+          <Toggle checked={allowInsecure} onChange={toggleInsecure} />
+        </SettingRow>
       </CardSection>
 
       {/* Telegram */}

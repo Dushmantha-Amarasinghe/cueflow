@@ -6,6 +6,7 @@ import path from 'path'
 import { store } from '../store.js'
 import { scheduler } from './scheduler.js'
 import { recorder } from './recorder.js'
+import { isAllowedExternalUrl } from '../security.js'
 
 class Runner {
   _activeTaskId = null
@@ -27,8 +28,14 @@ class Runner {
     this._emitter?.emit('task:running', task)
 
     try {
-      // Open meeting URL — convert Zoom https links to zoommtg:// so Zoom opens directly
-      await shell.openExternal(toDirectUrl(task.meetingUrl))
+      // Open meeting URL — convert Zoom https links to zoommtg:// so Zoom opens
+      // directly. Validate the scheme first: the URL came from a parsed email, so
+      // never hand a file:/javascript:/etc. link to the OS.
+      const openUrl = toDirectUrl(task.meetingUrl)
+      if (!isAllowedExternalUrl(openUrl)) {
+        throw new Error(`Refusing to open unsafe meeting URL: ${task.meetingUrl}`)
+      }
+      await shell.openExternal(openUrl)
       console.log('[runner] Opened:', task.meetingUrl)
 
       // Wait for meeting app to load

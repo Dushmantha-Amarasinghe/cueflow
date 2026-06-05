@@ -7,7 +7,14 @@ const IMAP_CONFIG = (creds) => ({
   secure: true,
   auth: { user: creds.email, pass: creds.password },
   logger: false,
-  tls: { rejectUnauthorized: false }
+  // Verify Gmail's TLS certificate by default — prevents man-in-the-middle
+  // interception of the App Password / email contents. Users whose antivirus or
+  // corporate proxy inspects HTTPS (and so presents its own root cert) can opt
+  // out via Settings; that's an informed trade-off, not the default.
+  tls: {
+    rejectUnauthorized: creds.allowInsecureTLS !== true,
+    minVersion: 'TLSv1.2'
+  }
 })
 
 export async function fetchNewEmails(gmailCreds, since) {

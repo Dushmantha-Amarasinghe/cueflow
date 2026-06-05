@@ -9,6 +9,7 @@ import { encrypt as encryptField, decrypt as decryptField } from './credentials.
 import { engine } from './engine/index.js'
 import { scheduler } from './engine/scheduler.js'
 import { startBot, stopBot, wireTelegramToEngine } from './telegram.js'
+import { isAllowedExternalUrl } from './security.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const _require   = createRequire(import.meta.url)
@@ -185,7 +186,9 @@ function createWindow() {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: true,
+      webviewTag: false,
+      spellcheck: false
     }
   })
 
@@ -194,6 +197,21 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
+
+  // Security: never let the renderer spawn new windows or navigate away from
+  // the app. External links are opened in the real browser, scheme-checked.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedExternalUrl(url)) shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    const dev = process.env['ELECTRON_RENDERER_URL']
+    if (!(dev && url.startsWith(dev)) && !url.startsWith('file://')) {
+      e.preventDefault()
+      if (isAllowedExternalUrl(url)) shell.openExternal(url)
+    }
+  })
+  mainWindow.webContents.on('will-attach-webview', (e) => e.preventDefault())
 
   mainWindow.on('ready-to-show', () => mainWindow.show())
   mainWindow.on('close', (e) => {
@@ -283,7 +301,10 @@ function setupIPC(win) {
   // ── Shell
   ipcMain.handle('shell:openPath',     (_, p)   => shell.openPath(p))
   ipcMain.handle('shell:showInFolder', (_, p)   => shell.showItemInFolder(p))
-  ipcMain.handle('shell:openExternal', (_, url) => shell.openExternal(url))
+  ipcMain.handle('shell:openExternal', (_, url) => {
+    if (!isAllowedExternalUrl(url)) return false   // block file:/javascript:/etc.
+    return shell.openExternal(url)
+  })
 
   // ── Dialog
   ipcMain.handle('dialog:selectFolder', async () => {
@@ -446,5 +467,13 @@ function setupIPC(win) {
 
   // ── Update controls (GitHub Releases)
   ipcMain.handle('update:check',   () => checkForUpdate())
-  ipcMain.handle('update:download', (_, url) => shell.openExternal(url))
+  ipcMain.handle('update:download', (_, url) => {
+    // Only ever open our own GitHub release/asset URLs
+    try {
+      const h = new URL(String(url)).hostname.toLowerCase()
+      const ok = h === 'github.com' || h.endsWith('.github.com') || h.endsWith('.githubusercontent.com')
+      if (ok) return shell.openExternal(url)
+    } catch { /* fall through */ }
+    return false
+  })
 }

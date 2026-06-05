@@ -8,8 +8,10 @@ function formatTimeUntil(iso) {
   const mins = Math.floor(ms / 60000)
   if (mins < 60) return `in ${mins}m`
   const hrs = Math.floor(mins / 60)
-  const rem = mins % 60
-  return `in ${hrs}h ${rem}m`
+  if (hrs < 24) return `in ${hrs}h ${mins % 60}m`
+  const days = Math.floor(hrs / 24)
+  const remHrs = hrs % 24
+  return remHrs > 0 ? `in ${days}d ${remHrs}h` : `in ${days}d`
 }
 
 function formatDate(iso) {

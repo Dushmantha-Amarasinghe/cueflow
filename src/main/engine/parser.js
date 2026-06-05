@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon'
 import { net } from 'electron'
 import { createRequire } from 'module'
+import { isSafeFetchUrl } from '../security.js'
 const require = createRequire(import.meta.url)
 const ical = require('node-ical')
 
@@ -104,12 +105,20 @@ async function parseICSFromEmail(email) {
   if (events.length === 0 && email.html) {
     const links = extractICSLinks(email.html)
     for (const url of links) {
+      // SSRF guard: only fetch public http(s) domains — never localhost or raw IPs
+      if (!isSafeFetchUrl(url)) {
+        console.warn('[parser] Skipping unsafe ICS link:', url)
+        continue
+      }
       try {
-        // net.fetch uses Chromium's stack — handles TLS inspection on corporate networks
-        const res = await net.fetch(url)
+        // Abort slow/huge responses (DoS protection)
+        const ctrl = new AbortController()
+        const timer = setTimeout(() => ctrl.abort(), 10000)
+        const res = await net.fetch(url, { signal: ctrl.signal, redirect: 'error' })
+        clearTimeout(timer)
         if (res.ok) {
           const text = await res.text()
-          if (text.includes('BEGIN:VCALENDAR')) {
+          if (text.length < 2_000_000 && text.includes('BEGIN:VCALENDAR')) {  // cap at 2 MB
             events.push(...extractVEvents(ical.sync.parseICS(text)))
             console.log(`[parser] ICS downloaded: ${events.length} event(s)`)
             if (events.length > 0) break

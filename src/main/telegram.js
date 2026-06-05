@@ -46,7 +46,10 @@ function fmtRelative(iso) {
   const mins = Math.floor(ms / 60000)
   if (mins < 60) return `in ${mins}m`
   const hrs = Math.floor(mins / 60)
-  return hrs > 0 ? `in ${hrs}h ${mins % 60}m` : `in ${mins}m`
+  if (hrs < 24) return `in ${hrs}h ${mins % 60}m`
+  const days = Math.floor(hrs / 24)
+  const remHrs = hrs % 24
+  return remHrs > 0 ? `in ${days}d ${remHrs}h` : `in ${days}d`
 }
 
 function fmtDuration(seconds) {
@@ -362,10 +365,12 @@ export async function startBot() {
   // Register slash-menu commands
   bot.telegram.setMyCommands(BOT_COMMANDS).catch(() => {})
 
-  // Auth — only the configured chat ID can interact
+  // Auth — deny by default. Only the configured Chat ID may interact; if no
+  // Chat ID is set, the bot responds to nobody (prevents strangers who find the
+  // bot from issuing commands like /join on the user's machine).
   bot.use((ctx, next) => {
     const id = String(ctx.from?.id || ctx.message?.chat?.id || '')
-    if (id && authorizedChatId && id !== String(authorizedChatId)) return
+    if (!authorizedChatId || id !== String(authorizedChatId)) return
     return next()
   })
 
