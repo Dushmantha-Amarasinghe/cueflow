@@ -146,6 +146,8 @@ class Engine extends EventEmitter {
 
   stopRecording() { runner.stop() }
 
+  closeMeeting(url) { return runner.closeApp(url) }
+
   async openAndRecord(url) {
     const manualTask = {
       id: crypto.randomUUID(),

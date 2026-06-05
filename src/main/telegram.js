@@ -1,4 +1,5 @@
 import { createRequire } from 'module'
+import fs from 'fs'
 import { store } from './store.js'
 import { getDecryptedSettings } from './credentials.js'
 import { scheduler } from './engine/scheduler.js'
@@ -10,6 +11,13 @@ const { Telegraf, Markup } = require('telegraf')
 
 let bot = null
 let authorizedChatId = null
+
+// Telegram Bot API caps bot uploads at 50 MB
+const TG_UPLOAD_LIMIT = 50 * 1024 * 1024
+
+// Tracks the most recent finished recording so the inline buttons
+// (Send recording / Close meeting) know what to act on.
+let _lastRecording = null   // { path, bytes, meetingUrl, flowName }
 
 // ─── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -230,13 +238,57 @@ export async function notifyRecordingDone(task) {
   const mb  = Math.round((r.bytes || 0) / 1024 / 1024)
   const fname = String(r.path || '').split(/[/\\]/).pop()
 
+  // Remember this recording for the inline buttons
+  _lastRecording = { path: r.path, bytes: r.bytes || 0, meetingUrl: task.meetingUrl, flowName: task.flowName }
+
+  // Build the action buttons
+  const row = [Markup.button.callback('📤  Send me the recording', 'send_recording')]
+  // Only offer "Close" for app-based meetings (not browser/Meet)
+  if (task.meetingUrl && !/meet\.google/i.test(task.meetingUrl)) {
+    row.push(Markup.button.callback('✕  Close Zoom', 'close_meeting'))
+  }
+
   await send(
     `✅ <b>Recording Saved</b>\n${DIV}\n` +
     `<b>${esc(task.meetingTitle || task.flowName)}</b>\n\n` +
     `📁 <code>${esc(fname)}</code>\n` +
     `⏱ Duration: <b>${fmtDuration(dur)}</b>\n` +
-    `💾 Size: <b>${mb} MB</b>`
+    `💾 Size: <b>${mb} MB</b>`,
+    Markup.inlineKeyboard([row])
   )
+
+  // Auto-upload if enabled in Telegram settings
+  const settings = getDecryptedSettings()
+  if (settings.telegram?.autoUpload) {
+    await uploadLastRecording()
+  }
+}
+
+// Upload the last recording to the authorized chat. Returns a result object.
+async function uploadLastRecording() {
+  const rec = _lastRecording
+  if (!rec?.path || !fs.existsSync(rec.path)) {
+    return { ok: false, reason: 'not-found' }
+  }
+  const bytes = fs.statSync(rec.path).size
+  if (bytes > TG_UPLOAD_LIMIT) {
+    const mb = Math.round(bytes / 1024 / 1024)
+    await send(
+      `⚠️ <b>Too large for Telegram</b>\n${DIV}\n` +
+      `The recording is <b>${mb} MB</b> — Telegram bots can only send files up to 50 MB.\n` +
+      `It's saved on your PC:\n<code>${esc(rec.path)}</code>`
+    )
+    return { ok: false, reason: 'too-large', mb }
+  }
+  try {
+    const filename = rec.path.split(/[/\\]/).pop()
+    await bot.telegram.sendDocument(authorizedChatId, { source: rec.path, filename })
+    return { ok: true }
+  } catch (e) {
+    console.error('[telegram] upload failed:', e.message)
+    await send(`⚠️ <b>Upload failed</b>\n<code>${esc(e.message)}</code>`)
+    return { ok: false, reason: e.message }
+  }
 }
 
 export async function notifyError(task) {
@@ -537,6 +589,36 @@ export async function startBot() {
     try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }) } catch { /* ignore */ }
     await ctx.reply('⏹ <b>Stop signal sent</b>\n<i>Saving and remuxing…</i>', { parse_mode: 'HTML' })
     engine.stopRecording()
+  })
+
+  // Send the last recording on demand
+  bot.action('send_recording', async (ctx) => {
+    if (!_lastRecording?.path) {
+      await ctx.answerCbQuery('No recording available', { show_alert: true })
+      return
+    }
+    await ctx.answerCbQuery('Uploading…')
+    const sizeMb = Math.round((_lastRecording.bytes || 0) / 1024 / 1024)
+    const msg = await ctx.reply(`📤 <b>Uploading recording…</b>  <i>(${sizeMb} MB)</i>`, { parse_mode: 'HTML' })
+    const up = await uploadLastRecording()
+    if (up.ok) {
+      try { await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id) } catch { /* ignore */ }
+    }
+    // too-large / errors already message the user from uploadLastRecording
+  })
+
+  // Close the meeting app (quit Zoom/Teams)
+  bot.action('close_meeting', async (ctx) => {
+    const url = _lastRecording?.meetingUrl
+    if (!url) {
+      await ctx.answerCbQuery('No meeting to close', { show_alert: true })
+      return
+    }
+    const did = engine.closeMeeting(url)
+    await ctx.answerCbQuery(did ? 'Closing meeting…' : 'Cannot close browser meetings')
+    if (did) {
+      await ctx.reply('✕ <b>Meeting app closed</b>', { parse_mode: 'HTML' })
+    }
   })
 
   // Cancel a specific scheduled task

@@ -66,6 +66,11 @@ class Runner {
         }
       }
 
+      // Auto-close the meeting app if the user enabled it in General settings
+      if ((store.read('settings', {})).general?.closeAppAfterRecord) {
+        closeMeetingApp(task.meetingUrl)
+      }
+
       scheduler.updateStatus(task.id, 'completed', { endedAt: new Date().toISOString() })
       this._emitter?.emit('task:completed', { ...task, result })
     } catch (err) {
@@ -86,6 +91,9 @@ class Runner {
     // Do NOT call recorder.stop() here — run() calls it after _waitForEnd exits
     // so the result is captured and _saveHistory is called correctly.
   }
+
+  // Close the meeting app for a given URL (e.g. quit Zoom after recording).
+  closeApp(url) { return closeMeetingApp(url) }
 
   async _waitForEnd(task, flow) {
     const stopMode  = flow?.schedule?.stopMode ?? 'window-close'
@@ -154,6 +162,21 @@ function detectProcess(url) {
   if (/teams\.microsoft/i.test(url))  return 'ms-teams'
   if (/meet\.google/i.test(url))      return 'chrome'
   return 'Zoom'
+}
+
+// Close the meeting application (quit Zoom/Teams). Never kills the browser for
+// Google Meet — that would close all the user's tabs.
+function closeMeetingApp(url) {
+  const name = detectProcess(url)
+  if (name === 'chrome') {
+    console.log('[runner] Skipping app close for browser-based meeting')
+    return false
+  }
+  exec(`taskkill /IM ${name}.exe /F /T`, (err) => {
+    if (err) console.warn(`[runner] could not close ${name}:`, err.message)
+    else console.log(`[runner] Closed ${name}`)
+  })
+  return true
 }
 
 function delay(ms) { return new Promise(r => setTimeout(r, ms)) }

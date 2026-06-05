@@ -72,6 +72,7 @@ function ConnectionsTab({ settings, onSave }) {
   const [tgStatus,   setTgStatus]   = useState(settings.telegram?.botToken ? 'connected' : null)
   const [tgError,    setTgError]    = useState('')
   const [showTgToken, setShowTgToken] = useState(false)
+  const [tgAutoUpload, setTgAutoUpload] = useState(settings.telegram?.autoUpload === true)
 
   useEffect(() => {
     setGmailEmail(settings.gmail?.email || '')
@@ -80,7 +81,14 @@ function ConnectionsTab({ settings, onSave }) {
     setTgToken(settings.telegram?.botToken || '')
     setTgChatId(settings.telegram?.chatId || '')
     setTgStatus(settings.telegram?.botToken ? 'connected' : null)
+    setTgAutoUpload(settings.telegram?.autoUpload === true)
   }, [settings])
+
+  // Persist auto-upload immediately, merging into the saved telegram settings
+  const toggleAutoUpload = async (v) => {
+    setTgAutoUpload(v)
+    await onSave({ telegram: { autoUpload: v } })
+  }
 
   const handleGmailConnect = async () => {
     if (!gmailEmail || !gmailPassword) { setGmailError('Email and App Password are required'); return }
@@ -187,6 +195,9 @@ function ConnectionsTab({ settings, onSave }) {
           </button>
           <StatusBadge status={tgStatus} />
         </div>
+        <SettingRow label="Auto-upload recordings" description="Send each finished recording to your chat (files up to 50 MB)">
+          <Toggle checked={tgAutoUpload} onChange={toggleAutoUpload} />
+        </SettingRow>
       </CardSection>
     </div>
   )
@@ -483,10 +494,11 @@ function GeneralTab({ settings, onSave }) {
   const [checkInterval, setCheckInterval] = useState(gen.checkIntervalMinutes ?? 5)
   const [gracePeriod, setGracePeriod] = useState(gen.gracePeriodMinutes ?? 45)
   const [autoClearDays, setAutoClearDays] = useState(gen.autoClearDays ?? 30)
+  const [closeApp, setCloseApp] = useState(gen.closeAppAfterRecord === true)
   const [saved, setSaved] = useState(false)
 
   const save = async () => {
-    await onSave({ general: { preventSleep, checkIntervalMinutes: Number(checkInterval), gracePeriodMinutes: Number(gracePeriod), autoClearDays: Number(autoClearDays) } })
+    await onSave({ general: { preventSleep, checkIntervalMinutes: Number(checkInterval), gracePeriodMinutes: Number(gracePeriod), autoClearDays: Number(autoClearDays), closeAppAfterRecord: closeApp } })
     setSaved(true); setTimeout(() => setSaved(false), 2000)
   }
 
@@ -502,6 +514,12 @@ function GeneralTab({ settings, onSave }) {
               className="w-16 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:outline-none text-center" />
             <span className="text-xs text-zinc-600">min</span>
           </div>
+        </SettingRow>
+      </CardSection>
+
+      <CardSection title="Meeting">
+        <SettingRow label="Close meeting after recording" description="Automatically quit Zoom/Teams when a recording finishes">
+          <Toggle checked={closeApp} onChange={setCloseApp} />
         </SettingRow>
       </CardSection>
 
