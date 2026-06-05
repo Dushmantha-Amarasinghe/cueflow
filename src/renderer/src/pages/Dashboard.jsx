@@ -50,9 +50,9 @@ function StatusCard({ engineStatus, onNavigate }) {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-zinc-100">{label}</p>
           {error ? (
-            <p className="text-xs text-red-400 mt-0.5 truncate">
+            <p className="text-xs text-red-400 mt-0.5 leading-snug">
               {error}
-              {isError && <span className="text-zinc-600 ml-1">— click to fix</span>}
+              {isError && <span className="text-zinc-500 ml-1">— click to open Settings</span>}
             </p>
           ) : lastCheck ? (
             <p className="text-xs text-zinc-600 mt-0.5">

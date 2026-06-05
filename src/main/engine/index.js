@@ -6,6 +6,18 @@ import { emailMatchesFlow, createTasksFromEmail } from './parser.js'
 import { scheduler } from './scheduler.js'
 import { runner } from './runner.js'
 
+// Turn raw IMAP/TLS errors into clear, actionable guidance for the dashboard.
+function friendlyError(msg) {
+  const m = String(msg || '')
+  if (/self.?signed|certificate|unable to (get|verify)|cert|CERT_|tls/i.test(m)) {
+    return 'Your antivirus or network is inspecting HTTPS. Open Settings → Connections and turn on “Allow insecure TLS” to fix this.'
+  }
+  if (/auth|credential|invalid|login|AUTHENTICATIONFAILED|application-specific|app password/i.test(m)) {
+    return 'Gmail sign-in failed — check your email and App Password in Settings → Connections.'
+  }
+  return m
+}
+
 class Engine extends EventEmitter {
   state = 'stopped' // stopped | starting | running | error
   error = null
@@ -105,7 +117,7 @@ class Engine extends EventEmitter {
     } catch (err) {
       console.error('[engine] Check failed:', err.message)
       if (this.state === 'running') {
-        this.error = err.message
+        this.error = friendlyError(err.message)
         this.emit('status:update')
       }
     } finally {
@@ -130,7 +142,11 @@ class Engine extends EventEmitter {
     if (this._checkTimer) { clearInterval(this._checkTimer); this._checkTimer = null }
   }
 
-  async testGmail(creds) { return testGmailConnection(creds) }
+  async testGmail(creds) {
+    const r = await testGmailConnection(creds)
+    if (!r.success) r.error = friendlyError(r.error)
+    return r
+  }
 
   async testTelegram(creds) {
     if (!creds.botToken) return { success: false, error: 'Bot token is required' }
