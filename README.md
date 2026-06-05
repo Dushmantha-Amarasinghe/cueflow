@@ -54,7 +54,7 @@ Out at dinner when a lecture starts? **Paste the meeting link to your Telegram b
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Flows](docs/screenshots/flows.png) |
 | **Dashboard** — live status & upcoming sessions | **Flows** — your automation pipelines |
 | ![Recording](docs/screenshots/recording.png) | ![Settings](docs/screenshots/settings.png) |
-| **Recording** — screen, resolution, audio | **Settings** — Gmail, Telegram & behaviour |
+| **Recording** — screen, resolution, audio | **About** — updates & open source |
 
 ## 🚀 Getting started
 
