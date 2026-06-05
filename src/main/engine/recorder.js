@@ -178,4 +178,37 @@ function remux(mkvPath) {
   })
 }
 
+// Compress a recording to fit under a target size (default ~48 MB for Telegram).
+// Computes a bitrate from the duration so the result reliably lands under the cap,
+// and downscales to 720p. Returns the path to a temp _tg.mp4 file, or null on failure.
+export function compressForTelegram(inputPath, durationSeconds, targetBytes = 48 * 1024 * 1024) {
+  return new Promise((resolve) => {
+    if (!fs.existsSync(inputPath)) { resolve(null); return }
+    const dur = durationSeconds && durationSeconds > 0 ? durationSeconds : 60
+
+    // total budget (bits) → subtract audio → video bitrate
+    const audioBps = 128 * 1000
+    let videoBps = Math.floor((targetBytes * 8) / dur) - audioBps
+    if (videoBps < 150 * 1000) videoBps = 150 * 1000   // floor so it's not unwatchable
+
+    const outPath = inputPath.replace(/\.(mp4|mkv)$/i, '_tg.mp4')
+    const args = [
+      '-y', '-i', inputPath,
+      '-c:v', 'libx264', '-preset', 'fast',
+      '-b:v', String(videoBps),
+      '-maxrate', String(Math.floor(videoBps * 1.45)),
+      '-bufsize', String(videoBps * 2),
+      '-vf', 'scale=-2:720',          // downscale to 720p height, keep aspect (even width)
+      '-c:a', 'aac', '-b:a', '128k',
+      '-movflags', '+faststart',
+      outPath
+    ]
+    const proc = spawn(ffmpegBin, args, { windowsHide: true, stdio: 'ignore' })
+    proc.on('close', (code) => {
+      resolve(code === 0 && fs.existsSync(outPath) ? outPath : null)
+    })
+    proc.on('error', () => resolve(null))
+  })
+}
+
 export const recorder = new Recorder()

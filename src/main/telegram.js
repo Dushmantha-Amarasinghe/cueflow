@@ -5,6 +5,7 @@ import { getDecryptedSettings } from './credentials.js'
 import { scheduler } from './engine/scheduler.js'
 import { runner } from './engine/runner.js'
 import { engine } from './engine/index.js'
+import { compressForTelegram } from './engine/recorder.js'
 
 const require = createRequire(import.meta.url)
 const { Telegraf, Markup } = require('telegraf')
@@ -238,12 +239,16 @@ export async function notifyRecordingDone(task) {
   const mb  = Math.round((r.bytes || 0) / 1024 / 1024)
   const fname = String(r.path || '').split(/[/\\]/).pop()
 
-  // Remember this recording for the inline buttons
-  _lastRecording = { path: r.path, bytes: r.bytes || 0, meetingUrl: task.meetingUrl, flowName: task.flowName }
+  // Remember this recording for the inline buttons / upload
+  _lastRecording = { path: r.path, bytes: r.bytes || 0, durationSeconds: dur, meetingUrl: task.meetingUrl, flowName: task.flowName }
 
-  // Build the action buttons
-  const row = [Markup.button.callback('📤  Send me the recording', 'send_recording')]
-  // Only offer "Close" for app-based meetings (not browser/Meet)
+  const settings   = getDecryptedSettings()
+  const autoUpload = settings.telegram?.autoUpload === true
+
+  // Buttons: "Send me the recording" only when auto-upload is OFF (otherwise it's
+  // already being sent). "Close Zoom" stays for app-based meetings.
+  const row = []
+  if (!autoUpload) row.push(Markup.button.callback('📤  Send me the recording', 'send_recording'))
   if (task.meetingUrl && !/meet\.google/i.test(task.meetingUrl)) {
     row.push(Markup.button.callback('✕  Close Zoom', 'close_meeting'))
   }
@@ -254,35 +259,64 @@ export async function notifyRecordingDone(task) {
     `📁 <code>${esc(fname)}</code>\n` +
     `⏱ Duration: <b>${fmtDuration(dur)}</b>\n` +
     `💾 Size: <b>${mb} MB</b>`,
-    Markup.inlineKeyboard([row])
+    row.length ? Markup.inlineKeyboard([row]) : undefined
   )
 
-  // Auto-upload if enabled in Telegram settings
-  const settings = getDecryptedSettings()
-  if (settings.telegram?.autoUpload) {
-    await uploadLastRecording()
+  // Auto-upload path: send if it fits, or compress-and-send if that toggle is on.
+  if (autoUpload) {
+    await deliverRecording({ allowCompress: settings.telegram?.compressLarge === true })
   }
 }
 
-// Upload the last recording to the authorized chat. Returns a result object.
-async function uploadLastRecording() {
+// Deliver the last recording to the chat.
+// - Under the limit → send directly.
+// - Over the limit  → compress and send if allowed, else report too-large.
+async function deliverRecording({ allowCompress }) {
   const rec = _lastRecording
-  if (!rec?.path || !fs.existsSync(rec.path)) {
-    return { ok: false, reason: 'not-found' }
-  }
+  if (!rec?.path || !fs.existsSync(rec.path)) return { ok: false, reason: 'not-found' }
+
   const bytes = fs.statSync(rec.path).size
-  if (bytes > TG_UPLOAD_LIMIT) {
-    const mb = Math.round(bytes / 1024 / 1024)
+
+  // Fits → send as-is
+  if (bytes <= TG_UPLOAD_LIMIT) {
+    return await sendFile(rec.path)
+  }
+
+  // Too large
+  const mb = Math.round(bytes / 1024 / 1024)
+  if (!allowCompress) {
     await send(
       `⚠️ <b>Too large for Telegram</b>\n${DIV}\n` +
-      `The recording is <b>${mb} MB</b> — Telegram bots can only send files up to 50 MB.\n` +
+      `The recording is <b>${mb} MB</b> (bot limit is 50 MB).\n` +
       `It's saved on your PC:\n<code>${esc(rec.path)}</code>`
     )
     return { ok: false, reason: 'too-large', mb }
   }
+
+  // Compress then send
+  await send(`🗜 <b>Compressing for Telegram…</b>\n<i>${mb} MB → reducing quality to fit under 50 MB. This may take a moment.</i>`)
+  const compressed = await compressForTelegram(rec.path, rec.durationSeconds)
+  if (!compressed) {
+    await send(`⚠️ <b>Compression failed</b>\nThe recording is saved on your PC:\n<code>${esc(rec.path)}</code>`)
+    return { ok: false, reason: 'compress-failed' }
+  }
+  const cBytes = fs.statSync(compressed).size
+  if (cBytes > TG_UPLOAD_LIMIT) {
+    const cmb = Math.round(cBytes / 1024 / 1024)
+    await send(`⚠️ <b>Still too large after compression</b> (${cmb} MB).\nSaved locally:\n<code>${esc(rec.path)}</code>`)
+    try { fs.unlinkSync(compressed) } catch { /* ignore */ }
+    return { ok: false, reason: 'too-large-after-compress' }
+  }
+  const result = await sendFile(compressed, '  (compressed)')
+  try { fs.unlinkSync(compressed) } catch { /* ignore */ }   // remove temp file
+  return result
+}
+
+async function sendFile(path, suffix = '') {
   try {
-    const filename = rec.path.split(/[/\\]/).pop()
-    await bot.telegram.sendDocument(authorizedChatId, { source: rec.path, filename })
+    const filename = path.split(/[/\\]/).pop()
+    await bot.telegram.sendDocument(authorizedChatId, { source: path, filename },
+      { caption: `📼 Recording${suffix}` })
     return { ok: true }
   } catch (e) {
     console.error('[telegram] upload failed:', e.message)
@@ -591,20 +625,20 @@ export async function startBot() {
     engine.stopRecording()
   })
 
-  // Send the last recording on demand
+  // Send the last recording on demand. The software decides: send directly if it
+  // fits, otherwise compress and send automatically (button path always compresses).
   bot.action('send_recording', async (ctx) => {
-    if (!_lastRecording?.path) {
-      await ctx.answerCbQuery('No recording available', { show_alert: true })
+    if (!_lastRecording?.path || !fs.existsSync(_lastRecording.path)) {
+      await ctx.answerCbQuery('Recording not found', { show_alert: true })
       return
     }
-    await ctx.answerCbQuery('Uploading…')
+    await ctx.answerCbQuery('Sending…')
+    try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }) } catch { /* ignore */ }
     const sizeMb = Math.round((_lastRecording.bytes || 0) / 1024 / 1024)
-    const msg = await ctx.reply(`📤 <b>Uploading recording…</b>  <i>(${sizeMb} MB)</i>`, { parse_mode: 'HTML' })
-    const up = await uploadLastRecording()
-    if (up.ok) {
-      try { await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id) } catch { /* ignore */ }
+    if (sizeMb <= 50) {
+      await ctx.reply(`📤 <b>Uploading recording…</b>  <i>(${sizeMb} MB)</i>`, { parse_mode: 'HTML' })
     }
-    // too-large / errors already message the user from uploadLastRecording
+    await deliverRecording({ allowCompress: true })
   })
 
   // Close the meeting app (quit Zoom/Teams)

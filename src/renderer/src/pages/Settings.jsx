@@ -73,6 +73,7 @@ function ConnectionsTab({ settings, onSave }) {
   const [tgError,    setTgError]    = useState('')
   const [showTgToken, setShowTgToken] = useState(false)
   const [tgAutoUpload, setTgAutoUpload] = useState(settings.telegram?.autoUpload === true)
+  const [tgCompress,   setTgCompress]   = useState(settings.telegram?.compressLarge === true)
 
   useEffect(() => {
     setGmailEmail(settings.gmail?.email || '')
@@ -82,12 +83,17 @@ function ConnectionsTab({ settings, onSave }) {
     setTgChatId(settings.telegram?.chatId || '')
     setTgStatus(settings.telegram?.botToken ? 'connected' : null)
     setTgAutoUpload(settings.telegram?.autoUpload === true)
+    setTgCompress(settings.telegram?.compressLarge === true)
   }, [settings])
 
-  // Persist auto-upload immediately, merging into the saved telegram settings
+  // Persist immediately, merging into the saved telegram settings
   const toggleAutoUpload = async (v) => {
     setTgAutoUpload(v)
     await onSave({ telegram: { autoUpload: v } })
+  }
+  const toggleCompress = async (v) => {
+    setTgCompress(v)
+    await onSave({ telegram: { compressLarge: v } })
   }
 
   const handleGmailConnect = async () => {
@@ -198,6 +204,11 @@ function ConnectionsTab({ settings, onSave }) {
         <SettingRow label="Auto-upload recordings" description="Send each finished recording to your chat (files up to 50 MB)">
           <Toggle checked={tgAutoUpload} onChange={toggleAutoUpload} />
         </SettingRow>
+        {tgAutoUpload && (
+          <SettingRow label="Compress & send large recordings" description="Recordings over 50 MB are downscaled to fit — quality may be reduced">
+            <Toggle checked={tgCompress} onChange={toggleCompress} />
+          </SettingRow>
+        )}
       </CardSection>
     </div>
   )
