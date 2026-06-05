@@ -24,6 +24,8 @@ class Recorder {
   _startedAt  = null
   _recording  = false
   _container  = 'mp4'
+  _mode       = 'chromium'  // 'chromium' | 'gdigrab'
+  _gdiProc    = null
   _startAck   = null     // resolver for the renderer's "started" reply
   _stopAck    = null     // resolver for the renderer's "stopped" reply
 
@@ -51,12 +53,19 @@ class Recorder {
       if (w && h) { maxWidth = w; maxHeight = h }
     }
 
-    // Pick the screen source matching the chosen display (else primary)
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
     const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } })
+
+    // If a specific screen is chosen but Chromium can't capture it (e.g. it's an
+    // HDR/10-bit monitor), fall back to gdigrab on that screen's region so the
+    // CORRECT screen still records (video only — no system audio on that path).
+    if (rec.display && !isCapturable(sources, rec.display)) {
+      console.warn(`[recorder] "${rec.display.name}" not Chromium-capturable (HDR?) — using gdigrab (video only)`)
+      return this._startGdigrab(rec, dir, safeName, ts)
+    }
+
     const sourceId = pickSourceId(sources, rec.display)
     if (!sourceId) throw new Error('No screen source available')
-
-    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
     this._startedAt = new Date()
 
     // Ask the renderer to start; it replies with which container it used.
@@ -67,12 +76,51 @@ class Recorder {
 
     if (!ack?.ok) throw new Error(ack?.error || 'Renderer could not start capture')
 
+    this._mode      = 'chromium'
     this._container = ack.container === 'webm' ? 'webm' : 'mp4'
     this._filePath  = path.join(dir, `${safeName}_${ts}.${this._container}`)
     this._writeStream = fs.createWriteStream(this._filePath)
     this._recording = true
-    console.log('[recorder] Recording →', this._filePath)
+    console.log('[recorder] Recording (chromium) →', this._filePath)
     return this._filePath
+  }
+
+  // gdigrab fallback — captures a screen region directly with ffmpeg. Works on
+  // any monitor (including HDR), but cannot capture system audio.
+  _startGdigrab(rec, dir, safeName, ts) {
+    return new Promise((resolve, reject) => {
+      const fps = rec.fps || 30
+      const b   = rec.display.bounds
+      const crf = rec.quality ?? 23
+      this._filePath = path.join(dir, `${safeName}_${ts}.mp4`)
+      const scale = (rec.resolution && rec.resolution !== 'native')
+        ? ['-vf', `scale=${rec.resolution.replace('x', ':')}:flags=lanczos`] : []
+
+      const args = [
+        '-y', '-f', 'gdigrab', '-framerate', String(fps),
+        '-offset_x', String(b.x), '-offset_y', String(b.y),
+        '-video_size', `${b.width}x${b.height}`,
+        '-draw_mouse', '1', '-i', 'desktop',
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf), '-pix_fmt', 'yuv420p',
+        ...scale, '-an', '-movflags', '+faststart', this._filePath
+      ]
+      const proc = spawn(ffmpegBin, args, { windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'] })
+      this._gdiProc = proc
+      this._mode = 'gdigrab'
+
+      let resolved = false
+      const onData = (chunk) => {
+        if (chunk.toString().includes('frame=')) {
+          proc.stderr.removeListener('data', onData)
+          if (!resolved) { resolved = true; this._recording = true; this._startedAt = new Date()
+            console.log('[recorder] Recording (gdigrab) →', this._filePath); resolve(this._filePath) }
+        }
+      }
+      proc.stderr.on('data', onData)
+      proc.on('error', (e) => { if (!resolved) { resolved = true; reject(e) } })
+      proc.on('close', () => { if (!resolved) { resolved = true; reject(new Error('gdigrab failed to start')) } })
+      setTimeout(() => { if (!resolved) { resolved = true; try { proc.kill() } catch {}; reject(new Error('gdigrab timeout')) } }, 12000)
+    })
   }
 
   // Called from main IPC as chunks arrive from the renderer.
@@ -91,19 +139,28 @@ class Recorder {
     this._recording = false
     const filePath  = this._filePath
     const startedAt = this._startedAt
-
-    // Tell the renderer to stop and wait for the final chunk
-    this._win?.webContents.send('recorder:stop')
-    await new Promise(res => { this._stopAck = res; setTimeout(res, 8000) })
-
-    // Flush the file
-    await new Promise(res => this._writeStream ? this._writeStream.end(res) : res())
-    this._writeStream = null
     this._filePath = null
 
-    if (!fs.existsSync(filePath)) return null
+    if (this._mode === 'gdigrab') {
+      // Gracefully quit ffmpeg
+      const proc = this._gdiProc; this._gdiProc = null
+      await new Promise(res => {
+        if (!proc) return res()
+        proc.on('close', res)
+        try { proc.stdin.write('q'); proc.stdin.end() } catch { try { proc.kill() } catch {} }
+        setTimeout(() => { try { proc.kill() } catch {} }, 4000)
+      })
+    } else {
+      // Chromium: tell the renderer to stop, flush the streamed file
+      this._win?.webContents.send('recorder:stop')
+      await new Promise(res => { this._stopAck = res; setTimeout(res, 8000) })
+      await new Promise(res => this._writeStream ? this._writeStream.end(res) : res())
+      this._writeStream = null
+    }
 
-    // If the renderer could only produce webm, convert to a compatible mp4.
+    if (!filePath || !fs.existsSync(filePath)) return null
+
+    // webm (Chromium fallback container) → mp4
     let finalPath = filePath
     if (filePath.endsWith('.webm')) {
       try { finalPath = await convertToMp4(filePath) }
@@ -126,6 +183,14 @@ class Recorder {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
+// Can Chromium's desktop capture grab the chosen display? (HDR/10-bit monitors
+// are absent from the source list.)
+function isCapturable(sources, display) {
+  if (!display?.id) return true
+  const rawId = String(display.id).replace(/^display_/, '')
+  return sources.some(s => String(s.display_id) === rawId)
+}
+
 function pickSourceId(sources, display) {
   if (!sources || sources.length === 0) return null
   if (display?.id) {
@@ -133,7 +198,6 @@ function pickSourceId(sources, display) {
     const m = sources.find(s => String(s.display_id) === rawId)
     if (m) return m.id
   }
-  // Fall back to the primary display's source, else the first
   const primary = screen.getPrimaryDisplay()
   const pm = sources.find(s => String(s.display_id) === String(primary.id))
   return (pm || sources[0]).id
