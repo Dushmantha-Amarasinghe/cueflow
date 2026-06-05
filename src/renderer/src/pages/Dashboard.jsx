@@ -186,18 +186,30 @@ export default function Dashboard({ onNavigate }) {
     lastCheck: null, isRecording: false,
     pendingCount: 0, nextTask: null, activeFlowCount: 0
   })
+  const [tasks, setTasks] = useState([])
 
   const loadStatus = useCallback(async () => {
-    const s = await window.cueflow?.engine.getStatus()
+    const [s, t] = await Promise.all([
+      window.cueflow?.engine.getStatus(),
+      window.cueflow?.tasks.getAll()
+    ])
     if (s) setEngineStatus(s)
+    if (t) setTasks(t)
   }, [])
 
   useEffect(() => {
     loadStatus()
-    const unsub = window.cueflow?.on.engineStatus(s => setEngineStatus(s))
+    const unsub = window.cueflow?.on.engineStatus(() => loadStatus())
     const interval = setInterval(loadStatus, 15000) // refresh every 15s
     return () => { unsub?.(); clearInterval(interval) }
   }, [loadStatus])
+
+  // Upcoming = pending tasks sorted by time, skipping the very next one
+  // (already shown in the Next Scheduled card above).
+  const upcoming = tasks
+    .filter(t => t.status === 'pending')
+    .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
+    .slice(1, 7)
 
   return (
     <div className="p-6 space-y-4">
@@ -213,9 +225,9 @@ export default function Dashboard({ onNavigate }) {
       <NextTaskCard task={engineStatus.nextTask} onNavigate={onNavigate} />
       <QuickActions onCheckNow={loadStatus} onNavigate={onNavigate} engineStatus={engineStatus} />
 
-      {/* Pending tasks list */}
-      {engineStatus.pendingCount > 0 && (
-        <div>
+      {/* Upcoming tasks list */}
+      {upcoming.length > 0 && (
+        <div className="space-y-2">
           <button
             onClick={() => onNavigate('flows')}
             className="flex items-center justify-between w-full text-left group"
@@ -225,6 +237,28 @@ export default function Dashboard({ onNavigate }) {
               See all in Flows <ChevronRight size={11} />
             </span>
           </button>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 divide-y divide-zinc-800/60">
+            {upcoming.map(task => {
+              const timeUntil = formatTimeUntil(task.scheduledAt)
+              return (
+                <div key={task.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                    <Video size={12} className="text-zinc-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-zinc-300 truncate">{task.meetingTitle || task.flowName}</p>
+                    <p className="text-xs text-zinc-600 mt-0.5">{formatDate(task.scheduledAt)}</p>
+                  </div>
+                  {timeUntil && (
+                    <span className={`text-xs flex-shrink-0 ${timeUntil === 'overdue' ? 'text-red-400' : 'text-zinc-500'}`}>
+                      {timeUntil}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

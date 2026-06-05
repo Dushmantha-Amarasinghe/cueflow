@@ -7,18 +7,37 @@ class Scheduler {
 
   setHandler(fn) { this._onFire = fn }
 
-  // Restore pending tasks from storage
+  // Restore pending tasks from storage + reconcile stale state left by a restart
   restore() {
     const tasks = store.read('tasks', [])
+    const history = store.read('history', [])
     const now = new Date()
-    let restored = 0
+    let restored = 0, reconciled = 0
+
     for (const task of tasks) {
+      // A task still marked 'running' means the app was restarted mid-recording —
+      // the in-memory runner is gone, so it can never finish on its own.
+      // Reconcile: 'completed' if a recording was saved, else 'interrupted'.
+      if (task.status === 'running') {
+        task.status = history.some(h => h.taskId === task.id) ? 'completed' : 'interrupted'
+        reconciled++
+        continue
+      }
+      // A 'pending' task whose time passed while the app was closed will never fire.
+      if (task.status === 'pending' && new Date(task.scheduledAt) <= now) {
+        task.status = 'missed'
+        reconciled++
+        continue
+      }
       if (task.status === 'pending' && new Date(task.scheduledAt) > now) {
         this._schedule(task)
         restored++
       }
     }
-    if (restored) console.log(`[scheduler] Restored ${restored} pending task(s)`)
+
+    if (reconciled) store.write('tasks', tasks)
+    if (restored)   console.log(`[scheduler] Restored ${restored} pending task(s)`)
+    if (reconciled) console.log(`[scheduler] Reconciled ${reconciled} stale task(s)`)
   }
 
   add(task) {

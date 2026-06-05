@@ -6,6 +6,8 @@ function statusIcon(status) {
   if (status === 'completed') return <CheckCircle2 size={13} className="text-green-500" />
   if (status === 'running')   return <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse mt-0.5" />
   if (status === 'failed')    return <AlertTriangle size={13} className="text-red-500" />
+  if (status === 'interrupted') return <AlertTriangle size={13} className="text-amber-500" />
+  if (status === 'missed')    return <Circle size={13} className="text-zinc-600" />
   if (status === 'cancelled') return <Circle size={13} className="text-zinc-700" />
   return <Circle size={13} className="text-zinc-600" />
 }
@@ -86,7 +88,9 @@ function FlowCard({ flow, tasks, onToggle, onEdit, onDelete }) {
                   task.status === 'pending' ? 'text-amber-500' :
                   task.status === 'running' ? 'text-green-400' :
                   task.status === 'completed' ? 'text-zinc-500' :
-                  task.status === 'failed' ? 'text-red-400' : 'text-zinc-700'
+                  task.status === 'failed' ? 'text-red-400' :
+                  task.status === 'interrupted' ? 'text-amber-600' :
+                  task.status === 'missed' ? 'text-zinc-600' : 'text-zinc-700'
                 }`}>{task.status}</span>
               </div>
             ))
