@@ -2,7 +2,10 @@
   "name": "cueflow",
   "version": "0.1.0",
   "description": "Automated meeting recorder triggered by email",
-  "author": "Dushmantha Amarasinghe",
+  "author": {
+    "name": "Cueflow",
+    "email": "dsbamarasinghe1234@gmail.com"
+  },
   "homepage": "https://github.com/Dushmantha-Amarasinghe/cueflow",
   "main": "out/main/index.js",
   "scripts": {
@@ -49,6 +52,7 @@
     "win": {
       "target": "nsis",
       "icon": "resources/icon.ico",
+      "publisherName": "Cueflow",
       "artifactName": "Cueflow-Setup.${ext}"
     },
     "nsis": {
