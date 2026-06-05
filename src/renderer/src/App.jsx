@@ -6,6 +6,7 @@ import Flows from './pages/Flows'
 import History from './pages/History'
 import Settings from './pages/Settings'
 import Onboarding from './pages/Onboarding'
+import { initScreenRecorder } from './screenRecorder'
 
 // Derive a simple sidebar status from the full engine status object
 function deriveStatus(s) {
@@ -24,12 +25,13 @@ export default function App() {
   const [ready,           setReady]           = useState(false)
   const [updateInfo,      setUpdateInfo]       = useState(null)   // { version, downloaded }
 
-  // First-run check
+  // First-run check + screen-recorder bridge
   useEffect(() => {
     window.cueflow?.settings.get().then(s => {
       setShowOnboarding(!s?.gmail?.email && !s?._onboardingDone)
       setReady(true)
     })
+    initScreenRecorder()
   }, [])
 
   // Pull initial engine status

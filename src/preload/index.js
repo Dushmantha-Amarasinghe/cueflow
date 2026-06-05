@@ -129,5 +129,22 @@ contextBridge.exposeInMainWorld('cueflow', {
   update: {
     check:    ()    => ipcRenderer.invoke('update:check'),
     download: (url) => ipcRenderer.invoke('update:download', url)
+  },
+
+  // Renderer-side screen recording bridge
+  recorder: {
+    onStart: (cb) => {
+      const h = (_, opts) => cb(opts)
+      ipcRenderer.on('recorder:start', h)
+      return () => ipcRenderer.removeListener('recorder:start', h)
+    },
+    onStop: (cb) => {
+      const h = () => cb()
+      ipcRenderer.on('recorder:stop', h)
+      return () => ipcRenderer.removeListener('recorder:stop', h)
+    },
+    started: (reply) => ipcRenderer.send('recorder:started', reply),
+    stopped: ()      => ipcRenderer.send('recorder:stopped'),
+    chunk:   (buf)   => ipcRenderer.send('recorder:chunk', buf)
   }
 })

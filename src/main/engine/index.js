@@ -5,6 +5,7 @@ import { fetchNewEmails, testGmailConnection } from './imap.js'
 import { emailMatchesFlow, createTasksFromEmail } from './parser.js'
 import { scheduler } from './scheduler.js'
 import { runner } from './runner.js'
+import { recorder } from './recorder.js'
 
 // Turn raw IMAP/TLS errors into clear, actionable guidance for the dashboard.
 function friendlyError(msg) {
@@ -198,6 +199,8 @@ class Engine extends EventEmitter {
       checking: this._checking,
       lastCheck: this._lastCheck?.toISOString() ?? null,
       isRecording: runner.isRunning,
+      recordingActive: recorder.isRecording,
+      recordingStartedAt: recorder.startedAt?.toISOString() ?? null,
       activeTaskId: runner.activeTaskId,
       pendingCount: pending.length,
       nextTask: pending[0] ?? null,

@@ -8,6 +8,7 @@ import { store } from './store.js'
 import { encrypt as encryptField, decrypt as decryptField } from './credentials.js'
 import { engine } from './engine/index.js'
 import { scheduler } from './engine/scheduler.js'
+import { recorder } from './engine/recorder.js'
 import { startBot, stopBot, wireTelegramToEngine } from './telegram.js'
 import { isAllowedExternalUrl } from './security.js'
 
@@ -188,7 +189,10 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       webviewTag: false,
-      spellcheck: false
+      spellcheck: false,
+      // Keep the renderer (and its MediaRecorder) running at full speed even
+      // when the window is hidden/minimised — recordings happen in the tray.
+      backgroundThrottling: false
     }
   })
 
@@ -227,6 +231,12 @@ app.whenReady().then(async () => {
   const win = createWindow()
   setupTray(win)
   setupIPC(win)
+
+  // Renderer-driven screen recorder wiring
+  recorder.setWindow(win)
+  ipcMain.on('recorder:chunk',   (_, buf)   => recorder.writeChunk(buf))
+  ipcMain.on('recorder:started', (_, reply) => recorder._onStarted(reply))
+  ipcMain.on('recorder:stopped', ()         => recorder._onStopped())
 
   // Wire engine events → renderer + tray
   engine.on('task:scheduled', task => {

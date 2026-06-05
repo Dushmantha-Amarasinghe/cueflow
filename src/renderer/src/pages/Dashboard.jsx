@@ -113,8 +113,24 @@ function NextTaskCard({ task, onNavigate }) {
   )
 }
 
-function StopRecordingBanner() {
+function formatElapsed(startIso) {
+  if (!startIso) return '0:00'
+  let s = Math.max(0, Math.floor((Date.now() - new Date(startIso)) / 1000))
+  const h = Math.floor(s / 3600); s -= h * 3600
+  const m = Math.floor(s / 60); s -= m * 60
+  const pad = n => String(n).padStart(2, '0')
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
+}
+
+function StopRecordingBanner({ startedAt }) {
   const [stopping, setStopping] = useState(false)
+  const [, force] = useState(0)
+
+  // Tick every second so the elapsed timer updates live
+  useEffect(() => {
+    const t = setInterval(() => force(n => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
 
   const handleStop = async () => {
     setStopping(true)
@@ -127,8 +143,13 @@ function StopRecordingBanner() {
       <div className="w-2.5 h-2.5 rounded-full bg-red-400 animate-pulse flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-red-300">Recording in progress</p>
-        <p className="text-xs text-red-500/70 mt-0.5">ffmpeg is capturing your screen</p>
+        <p className="text-xs text-red-500/70 mt-0.5">Capturing your screen &amp; system audio</p>
       </div>
+      {startedAt && (
+        <span className="font-mono text-base font-semibold text-red-300 tabular-nums flex-shrink-0">
+          {formatElapsed(startedAt)}
+        </span>
+      )}
       <button
         onClick={handleStop}
         disabled={stopping}
@@ -223,7 +244,7 @@ export default function Dashboard({ onNavigate }) {
       </div>
 
       <StatusCard engineStatus={engineStatus} onNavigate={onNavigate} />
-      {engineStatus.isRecording && <StopRecordingBanner />}
+      {engineStatus.isRecording && <StopRecordingBanner startedAt={engineStatus.recordingStartedAt} />}
       <NextTaskCard task={engineStatus.nextTask} onNavigate={onNavigate} />
       <QuickActions onCheckNow={loadStatus} onNavigate={onNavigate} engineStatus={engineStatus} />
 
