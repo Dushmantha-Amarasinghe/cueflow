@@ -232,12 +232,6 @@ app.whenReady().then(async () => {
   setupTray(win)
   setupIPC(win)
 
-  // Renderer-driven screen recorder wiring
-  recorder.setWindow(win)
-  ipcMain.on('recorder:chunk',   (_, buf)   => recorder.writeChunk(buf))
-  ipcMain.on('recorder:started', (_, reply) => recorder._onStarted(reply))
-  ipcMain.on('recorder:stopped', ()         => recorder._onStopped())
-
   // Wire engine events → renderer + tray
   engine.on('task:scheduled', task => {
     win.webContents.send('engine:task-scheduled', task)
@@ -276,9 +270,19 @@ app.whenReady().then(async () => {
   }
   setTimeout(runUpdateCheck, 8000)
   setInterval(runUpdateCheck, 4 * 60 * 60 * 1000)
+
+  // Pre-warm OBS so it's ready before the first recording trigger.
+  // 5 s delay lets the engine settle first; warmUp() is silent on failure.
+  setTimeout(() => recorder.warmUp(), 5000)
 })
 
-app.on('before-quit', () => { isQuitting = true; engine.stop(); stopBot() })
+app.on('before-quit', async () => {
+  isQuitting = true
+  engine.stop()
+  stopBot()
+  // Gracefully stop OBS if it's running so we don't leave a phantom process
+  try { await recorder.shutdown() } catch { /* ignore */ }
+})
 app.on('window-all-closed', () => {})
 
 // ─── IPC ──────────────────────────────────────────────────────────────────────
@@ -443,30 +447,23 @@ function setupIPC(win) {
     } catch { return [] }
   })
 
-  // ── Audio device enumeration
+  // ── Audio device enumeration via OBS WebSocket
+  // OBS enumerates WASAPI devices natively — this is more reliable than
+  // shelling out to ffmpeg, and works even before OBS has started (we just
+  // return the WASAPI device list from Windows directly via ffmpeg dshow).
   ipcMain.handle('audio:getDevices', () => new Promise((resolve) => {
-    const out = { microphones: [], systemOutputs: [] }
-
-    // DirectShow audio inputs (microphones)
-    exec(`"${_ffmpegBin}" -f dshow -list_devices true -i dummy`, (_, stdout, stderr) => {
+    const out = []
+    // List dshow capture devices (microphones visible to Windows)
+    exec(`"${_ffmpegBin}" -list_devices true -f dshow -i dummy`, (_, stdout, stderr) => {
       let inAudio = false
       for (const line of (stdout + stderr).split('\n')) {
         if (line.includes('DirectShow audio devices')) { inAudio = true; continue }
         if (inAudio) {
           const m = line.match(/"([^"@][^"]*)"/)
-          if (m) out.microphones.push(m[1])
+          if (m) out.push({ name: m[1] })
         }
       }
-
-      // WASAPI output devices (for loopback capture)
-      exec(`"${_ffmpegBin}" -f wasapi -list_devices 1 -i ""`, (__, s2, e2) => {
-        for (const line of (s2 + e2).split('\n')) {
-          const m = line.match(/\]\s+"([^"]+)"/)
-          if (m) out.systemOutputs.push(m[1])
-        }
-        if (out.systemOutputs.length === 0) out.systemOutputs.push('default')
-        resolve(out)
-      })
+      resolve(out)
     })
   }))
 
@@ -474,6 +471,9 @@ function setupIPC(win) {
   ipcMain.handle('recordings:getDefaultPath', () =>
     path.join(app.getPath('documents'), 'Cueflow', 'Recordings')
   )
+
+  // ── OBS capabilities (live query via WebSocket)
+  ipcMain.handle('obs:getCapabilities', () => recorder.getCapabilities())
 
   // ── Update controls (GitHub Releases)
   ipcMain.handle('update:check',   () => checkForUpdate())

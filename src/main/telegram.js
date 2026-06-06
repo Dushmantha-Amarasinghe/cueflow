@@ -1,5 +1,8 @@
 import { createRequire } from 'module'
 import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import { exec } from 'child_process'
 import { store } from './store.js'
 import { getDecryptedSettings } from './credentials.js'
 import { scheduler } from './engine/scheduler.js'
@@ -19,6 +22,77 @@ const TG_UPLOAD_LIMIT = 50 * 1024 * 1024
 // Tracks the most recent finished recording so the inline buttons
 // (Send recording / Close meeting) know what to act on.
 let _lastRecording = null   // { path, bytes, meetingUrl, flowName }
+
+// Tracks the live recording control message (screen switcher / view / stop)
+let _activeRecordingMsgId = null
+let _activeTask           = null
+let _allDisplays          = []
+let _activeDisplayId      = null
+
+// ─── Screenshot capture (PowerShell + System.Drawing) ─────────────────────────
+
+const CAPTURE_PS1 = path.join(os.tmpdir(), 'cueflow-capture.ps1')
+let _capturePs1Written = false
+
+function ensureCaptureScript() {
+  if (_capturePs1Written) return
+  const script = `param([string]$OutDir)
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+$screens = [System.Windows.Forms.Screen]::AllScreens
+$i = 0
+foreach ($s in $screens) {
+  $b = $s.Bounds
+  $bmp = New-Object System.Drawing.Bitmap($b.Width, $b.Height)
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+  $g.Dispose()
+  $out = Join-Path $OutDir "screen_$i.jpg"
+  $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+  $bmp.Dispose()
+  Write-Output $out
+  $i++
+}
+`
+  try { fs.writeFileSync(CAPTURE_PS1, script, 'utf8'); _capturePs1Written = true }
+  catch (e) { console.warn('[telegram] could not write capture script:', e.message) }
+}
+
+function captureAllScreenshots() {
+  ensureCaptureScript()
+  if (!_capturePs1Written) return Promise.resolve([])
+  const outDir = os.tmpdir()
+  return new Promise(resolve => {
+    exec(
+      `powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${CAPTURE_PS1}" "${outDir}"`,
+      { timeout: 15000 },
+      (err, stdout) => {
+        if (err) { console.warn('[telegram] screenshot capture failed:', err.message); resolve([]); return }
+        const paths = stdout.trim().split(/\r?\n/).filter(Boolean)
+        resolve(paths)
+      }
+    )
+  })
+}
+
+// ─── Recording control keyboard ────────────────────────────────────────────────
+
+// activeIdx = index into allDisplays of the currently recording screen (-1 = unknown)
+function buildRecordingKeyboard(allDisplays, activeIdx) {
+  const rows = []
+  if (allDisplays.length > 0) {
+    const btns = allDisplays.map((_d, i) =>
+      Markup.button.callback((i === activeIdx ? '✅ ' : '') + `Screen ${i + 1}`, `switch_screen:${i}`)
+    )
+    for (let i = 0; i < btns.length; i += 2) rows.push(btns.slice(i, i + 2))
+  }
+  rows.push([Markup.button.callback('📸 View screens', 'view_screens')])
+  rows.push([
+    Markup.button.callback('🔄 Retry maximize', 'retry_maximize'),
+    Markup.button.callback('⏹ Stop', 'stop_recording')
+  ])
+  return Markup.inlineKeyboard(rows)
+}
 
 // ─── Formatting helpers ────────────────────────────────────────────────────────
 
@@ -220,19 +294,61 @@ export async function notifyScheduled(task) {
   )
 }
 
-export async function notifyRecordingStarted(task) {
-  return await send(
+// Match an OBS or Electron display object against the Electron displays list.
+// OBS names look like "Screen 2: 1920x1080 @ 2560,199" — parse the @ x,y position.
+function findElectronDisplayIndex(display, electronDisplays) {
+  if (!display || !electronDisplays.length) return -1
+  // Electron-style display with bounds
+  if (display.bounds) {
+    return electronDisplays.findIndex(d =>
+      d.bounds.x === display.bounds.x && d.bounds.y === display.bounds.y
+    )
+  }
+  // OBS monitor name: extract "@ x,y"
+  if (display.name) {
+    const m = display.name.match(/@\s*(-?\d+),(-?\d+)/)
+    if (m) {
+      const ox = parseInt(m[1]), oy = parseInt(m[2])
+      return electronDisplays.findIndex(d => d.bounds.x === ox && d.bounds.y === oy)
+    }
+  }
+  return -1
+}
+
+export async function notifyRecordingStarted(task, display, allDisplays) {
+  _activeTask      = task
+  _allDisplays     = allDisplays || []
+  _activeDisplayId = display?.id ?? null
+
+  const screenIdx  = findElectronDisplayIndex(display, _allDisplays)
+  _activeDisplayId = screenIdx   // store the resolved index (-1 if unknown)
+  const screenName = screenIdx >= 0 ? `Screen ${screenIdx + 1}` : 'configured screen'
+
+  const msg = await send(
     `🔴 <b>Recording Started</b>\n${DIV}\n` +
     `<b>${esc(task.meetingTitle || task.flowName)}</b>\n` +
     `📌 <i>${esc(task.flowName)}</i>\n` +
+    `🖥 Capturing: <b>${screenName}</b>\n` +
     `⏱ Started at <code>${fmtTime(new Date().toISOString())}</code>`,
-    Markup.inlineKeyboard([[
-      Markup.button.callback('⏹  Stop Recording', 'stop_recording')
-    ]])
+    buildRecordingKeyboard(_allDisplays, _activeDisplayId)
   )
+  _activeRecordingMsgId = msg?.message_id ?? null
 }
 
 export async function notifyRecordingDone(task) {
+  // Remove the live control keyboard from the recording-started message
+  if (_activeRecordingMsgId && bot && authorizedChatId) {
+    try {
+      await bot.telegram.editMessageReplyMarkup(
+        authorizedChatId, _activeRecordingMsgId, undefined, { inline_keyboard: [] }
+      )
+    } catch { /* message may be too old — ignore */ }
+  }
+  _activeRecordingMsgId = null
+  _activeTask           = null
+  _allDisplays          = []
+  _activeDisplayId      = null
+
   const r = task.result
   if (!r) {
     await send(`✅ <b>Session ended</b>  —  <i>${esc(task.meetingTitle || task.flowName)}</i>`)
@@ -639,12 +755,14 @@ export async function startBot() {
     }
     await ctx.answerCbQuery('Sending…')
     try { await ctx.editMessageReplyMarkup({ inline_keyboard: [] }) } catch { /* ignore */ }
-    const sizeMb = Math.round((_lastRecording.bytes || 0) / 1024 / 1024)
-    if (sizeMb <= 50) {
-      await ctx.reply(`📤 <b>Uploading recording…</b>  <i>(${sizeMb} MB)</i>`, { parse_mode: 'HTML' })
-    }
-    await deliverRecording({ allowCompress: true })
+    const actualBytes = fs.existsSync(_lastRecording.path) ? fs.statSync(_lastRecording.path).size : (_lastRecording.bytes || 0)
+    const sizeMb = Math.round(actualBytes / 1024 / 1024)
+    await ctx.reply(`📤 <b>Uploading recording…</b>  <i>(${sizeMb} MB — this may take a minute)</i>`, { parse_mode: 'HTML' })
+    // Fire-and-forget: don't await inside the handler (90 s callback timeout).
+    deliverRecording({ allowCompress: true })
+      .catch(e => console.error('[telegram] deliver failed:', e.message))
   })
+
 
   // Close the meeting app (quit Zoom/Teams)
   bot.action('close_meeting', async (ctx) => {
@@ -703,6 +821,61 @@ export async function startBot() {
     }
   })
 
+  // ── Screen-control actions (active during recording) ────────────────────────
+
+  bot.action('view_screens', async (ctx) => {
+    await ctx.answerCbQuery('Capturing screens…')
+    const paths = await captureAllScreenshots()
+    if (paths.length === 0) {
+      await ctx.reply('⚠️ <b>Could not capture screenshots</b>', { parse_mode: 'HTML' })
+      return
+    }
+    for (let i = 0; i < paths.length; i++) {
+      const p = paths[i]
+      if (!fs.existsSync(p)) continue
+      const isActive = String(_allDisplays[i]?.id) === String(_activeDisplayId)
+      try {
+        await bot.telegram.sendPhoto(authorizedChatId, { source: p },
+          { caption: `🖥 Screen ${i + 1}${isActive ? ' ← recording here' : ''}` })
+      } catch (e) {
+        console.warn('[telegram] screenshot send failed:', e.message)
+      }
+      try { fs.unlinkSync(p) } catch {}
+    }
+  })
+
+  bot.action(/^switch_screen:(\d+)$/, async (ctx) => {
+    const idx = parseInt(ctx.match[1])
+    const display = _allDisplays[idx]
+    if (!display) {
+      await ctx.answerCbQuery('Screen not found', { show_alert: true })
+      return
+    }
+    await ctx.answerCbQuery(`Switching to Screen ${idx + 1}…`)
+    const ok = await engine.switchRecordingDisplay(display)
+    if (ok) {
+      _activeDisplayId = idx
+      try {
+        await ctx.editMessageReplyMarkup(
+          buildRecordingKeyboard(_allDisplays, _activeDisplayId).reply_markup
+        )
+      } catch { /* ignore */ }
+      await ctx.reply(`🖥 <b>Switched to Screen ${idx + 1}</b>`, { parse_mode: 'HTML' })
+    } else {
+      await ctx.reply(`⚠️ <b>Could not switch screen</b> — not recording right now`, { parse_mode: 'HTML' })
+    }
+  })
+
+  bot.action('retry_maximize', async (ctx) => {
+    if (!_activeTask?.meetingUrl) {
+      await ctx.answerCbQuery('No active meeting', { show_alert: true })
+      return
+    }
+    await ctx.answerCbQuery('Maximizing window…')
+    engine.maximizeMeetingWindow(_activeTask.meetingUrl)
+    await ctx.reply('🔄 <b>Retry maximize sent</b>', { parse_mode: 'HTML' })
+  })
+
   // ── Auto-detect meeting URLs pasted directly ─────────────────────────────────
   bot.on('message', async (ctx) => {
     const text = ctx.message?.text || ''
@@ -744,12 +917,28 @@ export function wireTelegramToEngine() {
     notifyScheduled(task)
   })
 
-  engine.on('task:running', task => {
-    notifyRecordingStarted(task)
+  engine.on('recording:started', ({ task, display, allDisplays }) => {
+    notifyRecordingStarted(task, display, allDisplays)
   })
 
   engine.on('task:completed', task => {
     notifyRecordingDone(task)
+  })
+
+  engine.on('recording:compressing', ({ mode }) => {
+    const label = mode === 'max' ? 'Max (HEVC CRF 28 · medium)' : 'Smart (HEVC CRF 30 · fast)'
+    send(`🗜 <b>Compressing…</b>  <i>${label}</i>\nRe-encoding with HEVC. Running in background.`)
+  })
+
+  engine.on('recording:compressed', ({ ok, originalBytes, finalBytes }) => {
+    if (!ok) {
+      send('⚠️ <b>Compression skipped</b>  —  FFmpeg not available or encoding failed.')
+      return
+    }
+    const before = Math.round(originalBytes / 1024 / 1024)
+    const after  = Math.round(finalBytes  / 1024 / 1024)
+    const pct    = Math.round((1 - finalBytes / originalBytes) * 100)
+    send(`✅ <b>Compression done</b>  —  <b>${before} MB → ${after} MB</b>  <i>(${pct}% smaller)</i>`)
   })
 
   engine.on('task:failed', task => {

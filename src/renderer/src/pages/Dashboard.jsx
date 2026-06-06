@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Video, Clock, Inbox, Play, RefreshCw, AlertTriangle, CheckCircle, Zap, ChevronRight, Square } from 'lucide-react'
+import { Video, Clock, Inbox, Play, RefreshCw, AlertTriangle, CheckCircle, Zap, ChevronRight } from 'lucide-react'
 
 function formatTimeUntil(iso) {
   if (!iso) return null
@@ -122,11 +122,11 @@ function formatElapsed(startIso) {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
 }
 
-function StopRecordingBanner({ startedAt }) {
+function RecordingCard({ engineStatus }) {
+  const { recordingStartedAt, activeFlowCount, pendingCount } = engineStatus
   const [stopping, setStopping] = useState(false)
   const [, force] = useState(0)
 
-  // Tick every second so the elapsed timer updates live
   useEffect(() => {
     const t = setInterval(() => force(n => n + 1), 1000)
     return () => clearInterval(t)
@@ -139,25 +139,29 @@ function StopRecordingBanner({ startedAt }) {
   }
 
   return (
-    <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 flex items-center gap-3">
-      <div className="w-2.5 h-2.5 rounded-full bg-red-400 animate-pulse flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-red-300">Recording in progress</p>
-        <p className="text-xs text-red-500/70 mt-0.5">Capturing your screen &amp; system audio</p>
-      </div>
-      {startedAt && (
-        <span className="font-mono text-base font-semibold text-red-300 tabular-nums flex-shrink-0">
-          {formatElapsed(startedAt)}
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.15em]">Rec</span>
+        </div>
+        <span className="font-mono text-2xl font-bold text-zinc-100 tabular-nums tracking-tight flex-1 leading-none">
+          {formatElapsed(recordingStartedAt)}
         </span>
-      )}
-      <button
-        onClick={handleStop}
-        disabled={stopping}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-xs font-medium text-white transition-colors flex-shrink-0"
-      >
-        <Square size={11} />
-        {stopping ? 'Stopping…' : 'Stop'}
-      </button>
+        <button
+          onClick={handleStop}
+          disabled={stopping}
+          className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 disabled:opacity-50 text-xs font-medium text-zinc-300 transition-colors"
+        >
+          {stopping ? 'Stopping…' : 'Stop'}
+        </button>
+      </div>
+      <div className="px-4 pb-3 pt-0">
+        <p className="text-xs text-zinc-600">
+          {activeFlowCount} active flow{activeFlowCount !== 1 ? 's' : ''}
+          {pendingCount > 0 ? ` · ${pendingCount} scheduled` : ''}
+        </p>
+      </div>
     </div>
   )
 }
@@ -243,8 +247,10 @@ export default function Dashboard({ onNavigate }) {
         </p>
       </div>
 
-      <StatusCard engineStatus={engineStatus} onNavigate={onNavigate} />
-      {engineStatus.isRecording && <StopRecordingBanner startedAt={engineStatus.recordingStartedAt} />}
+      {engineStatus.isRecording
+        ? <RecordingCard engineStatus={engineStatus} />
+        : <StatusCard engineStatus={engineStatus} onNavigate={onNavigate} />
+      }
       <NextTaskCard task={engineStatus.nextTask} onNavigate={onNavigate} />
       <QuickActions onCheckNow={loadStatus} onNavigate={onNavigate} engineStatus={engineStatus} />
 

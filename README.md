@@ -7,11 +7,12 @@
 **Automated meeting recorder triggered by email**
 
 [![Release](https://img.shields.io/github/v/release/Dushmantha-Amarasinghe/cueflow?style=flat-square&color=7c3aed)](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Dushmantha-Amarasinghe/cueflow/total?style=flat-square&color=22c55e)](https://github.com/Dushmantha-Amarasinghe/cueflow/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows-blue?style=flat-square)](https://github.com/Dushmantha-Amarasinghe/cueflow/releases)
 [![License](https://img.shields.io/github/license/Dushmantha-Amarasinghe/cueflow?style=flat-square)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/Dushmantha-Amarasinghe/cueflow?style=flat-square)](https://github.com/Dushmantha-Amarasinghe/cueflow/stargazers)
 
-Cueflow watches your Gmail inbox for meeting invitation emails, extracts the schedule from ICS attachments, then automatically joins and records the meeting — even when you're away from your computer. Control everything from Telegram.
+Cueflow watches your Gmail inbox for meeting invitations, extracts the schedule from ICS attachments, then automatically joins and records with OBS — compressing to HEVC in the background. Control everything from Telegram, even from your phone.
 
 ### [⬇ Download for Windows](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest/download/Cueflow-Setup.exe) · [🌐 Website](https://dushmantha-amarasinghe.github.io/cueflow/) · [🐛 Report a Bug](https://github.com/Dushmantha-Amarasinghe/cueflow/issues)
 
@@ -23,7 +24,7 @@ Cueflow watches your Gmail inbox for meeting invitation emails, extracts the sch
 
 ## 📱 The killer feature: join from your phone
 
-Out at dinner when a lecture starts? **Paste the meeting link to your Telegram bot** — your PC at home opens it and starts recording. When it's done, the recording is sent right back to your chat. Stop, check status, manage flows — all remotely.
+Out at dinner when a lecture starts? **Paste the meeting link to your Telegram bot** — your PC at home opens it, starts recording, compresses the file to HEVC, and sends it right back to your chat. Stop, check status, switch screens, manage flows — all remotely.
 
 ---
 
@@ -32,16 +33,16 @@ Out at dinner when a lecture starts? **Paste the meeting link to your Telegram b
 - **Email-triggered automation** — watches Gmail via IMAP, no OAuth required (App Password only)
 - **ICS/calendar aware** — parses `.ics` attachments and recurring events to schedule recordings in advance
 - **Flows** — modular, named automation pipelines; run multiple flows in parallel with independent rules
-- **ffmpeg recording** — bundled ffmpeg, no OBS needed; records desktop + system audio (WASAPI loopback)
-- **MKV → MP4 remux** on clean stop — crash-safe intermediate format, fast container conversion at the end
-- **Multi-monitor support** — pick exactly which screen to record
-- **Telegram bot** — rich notifications with inline buttons; control recordings from your phone
+- **OBS recording** — bundled OBS Studio captures your screen at full quality; system audio (WASAPI loopback), mic, or both; multi-monitor selection; CRF quality slider
+- **HEVC compression** — after recording, bundled ffmpeg silently re-encodes to x265 in the background; a 70 MB lecture becomes ~1 MB without visible quality loss
+- **Telegram screen control** — during recording, view live screenshots of every monitor, switch the OBS capture to a different screen with one tap, retry window maximize
+- **Telegram bot** — rich notifications, inline buttons, `/join`, `/stop`, `/schedule`, `/flows`, `/history` and more
 - **Auto-update** — checks GitHub Releases on startup and notifies you when a new version is available
-- **100% local** — no cloud, no central server, no subscription
+- **100% local** — no cloud, no central server, no subscription; credentials encrypted via Electron safeStorage
 
 ## 📥 Download
 
-[**⬇ Download the latest installer**](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest/download/Cueflow-Setup.exe) — ffmpeg is bundled, nothing else to install.
+[**⬇ Download the latest installer**](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest/download/Cueflow-Setup.exe) — OBS and ffmpeg are bundled, nothing else to install.
 
 > **Requirements:** Windows 10 / 11 (64-bit). Zoom, Teams, or any meeting app already installed.
 >
@@ -54,16 +55,33 @@ Out at dinner when a lecture starts? **Paste the meeting link to your Telegram b
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Flows](docs/screenshots/flows.png) |
 | **Dashboard** — live status & upcoming sessions | **Flows** — your automation pipelines |
 | ![Recording](docs/screenshots/recording.png) | ![Settings](docs/screenshots/settings.png) |
-| **Recording** — screen, resolution, audio | **About** — updates & open source |
+| **Recording** — screen, encoder, audio & post-compression | **Settings** — connections, Telegram & about |
 
 ## 🚀 Getting started
 
-1. Run the installer — ffmpeg is bundled, nothing else to install
+1. Run the installer — OBS and ffmpeg are bundled, nothing else to install
 2. On first launch the setup wizard guides you through:
    - **Gmail** — enter your address + a [Google App Password](https://myaccount.google.com/apppasswords)
-   - **Telegram** *(optional)* — paste your bot token + chat ID for phone notifications
+   - **Telegram** *(optional)* — paste your bot token + chat ID for phone notifications and file delivery
 3. Go to **Flows → New Flow**, set a subject filter (e.g. `"Zoom"`) and choose your meeting type
 4. That's it — Cueflow monitors your inbox and records matching meetings automatically
+
+## 📱 Telegram bot commands
+
+| Command | Description |
+|---------|-------------|
+| `/status` | Engine state & current recording |
+| `/schedule` | All upcoming sessions |
+| `/schedule <name>` | Sessions for a specific flow |
+| `/flows` | View & manage flows |
+| `/next` | Next session countdown |
+| `/history` | Recent recordings |
+| `/join <url>` | Join & record a meeting now |
+| `/stop` | Stop current recording |
+| `/pause <name>` | Pause a flow |
+| `/resume <name>` | Re-enable a flow |
+
+During a recording, inline buttons let you **view screenshots**, **switch capture screen**, **retry maximize**, and **stop** — all without opening the app.
 
 ## 🔧 Configuration
 
@@ -87,11 +105,12 @@ Google App Passwords let Cueflow access your inbox without your real password an
 | Setting | Default | Notes |
 |---------|---------|-------|
 | Save folder | `Documents\Cueflow\Recordings` | Subfolders per flow optional |
-| Resolution | Full screen (native) | Can scale down to 1080p, 720p, etc. |
+| Resolution | Native (full screen) | Can scale down to 1080p, 720p, etc. |
 | Frame rate | 30 fps | |
-| Codec | H.264 | H.265 also available |
-| Audio | System audio (WASAPI loopback) | Falls back to video-only if unavailable |
-| Screen | All screens | Pick a specific monitor in Settings |
+| Encoder | H.264 Software (x264) | NVENC, AMF, QuickSync detected automatically |
+| Quality (CRF) | 23 | 0 = lossless, 51 = smallest; 18–28 recommended |
+| Audio | System audio (WASAPI loopback) | Mic, both, or none also available |
+| Post-compression | On (Smart) | HEVC CRF 30 · fast — re-encodes in background after recording |
 
 ## 🏗️ Building from source
 
@@ -115,8 +134,9 @@ The installer will be in `dist/`.
 
 | Layer | Technology |
 |-------|-----------|
-| UI | Electron + React + Tailwind CSS |
-| Recording | ffmpeg (bundled binary) |
+| UI | Electron + React (Vite) |
+| Recording | OBS Studio (bundled, portable) |
+| Compression | ffmpeg · libx265 HEVC (bundled) |
 | Email | imapflow + mailparser |
 | Scheduling | node-ical + rrule-temporal + node-schedule |
 | Notifications | Telegraf (Telegram Bot API) |

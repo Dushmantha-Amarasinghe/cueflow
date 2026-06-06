@@ -1,6 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { Mail, MessageCircle, Video, Settings as Cog, Info, Eye, EyeOff, Check, X, FolderOpen, RefreshCw, ExternalLink, Monitor, Heart, Download } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { Mail, Video, Settings as Cog, Info, Eye, EyeOff, Check, X, FolderOpen, RefreshCw, ExternalLink, Monitor, Heart, Download, Wifi, WifiOff } from 'lucide-react'
 import Logo from '../components/Logo'
+
+// OBS Studio logo — three-arc iris + outer ring + center dot
+function ObsLogo({ size = 28, className = '' }) {
+  // At r=33, circumference ≈ 207.35. Three arcs of ~107° (61.7) with ~13° gaps (7.5).
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+      <circle cx="50" cy="50" r="46" stroke="white" strokeWidth="5.5" />
+      <circle cx="50" cy="50" r="33" stroke="white" strokeWidth="11"
+        strokeDasharray="61.7 7.5" transform="rotate(-90 50 50)" />
+      <circle cx="50" cy="50" r="13" fill="white" />
+    </svg>
+  )
+}
 
 const TABS = [
   { id: 'connections', label: 'Connections', icon: Mail },
@@ -258,22 +271,91 @@ function RecordingTab({ settings, onSave, onPatch }) {
   const [subfolder,     setSubfolder]     = useState(rec.subfolders !== false)
   const [resolution,    setResolution]    = useState(rec.resolution || 'native')
   const [fps,           setFps]           = useState(rec.fps || 30)
-  const [codec,         setCodec]         = useState(rec.codec || 'h264')
+  // encoder holds the full OBS encoder ID (e.g. 'obs_nvenc_h264_tex').
+  // Falls back from legacy 'codec' field when 'encoder' has never been saved.
+  const [encoder,       setEncoder]       = useState(
+    rec.encoder || (rec.codec === 'h265' ? 'obs_ffmpeg_hevc_sw' : 'obs_x264')
+  )
   const [quality,       setQuality]       = useState(rec.quality ?? 23)
-  const [audioMode,     setAudioMode]     = useState(rec.audioMode || 'system')
-  const [audioDevice,   setAudioDevice]   = useState(rec.audioDevice || '')
+  const [audioMode,      setAudioMode]      = useState(rec.audioMode || 'system')
+  const [sysAudioDevice, setSysAudioDevice] = useState(rec.sysAudioDevice || '')
+  const [micDevice,      setMicDevice]      = useState(rec.micDevice || '')
+  const [audioDevices,   setAudioDevices]   = useState([])
+  const [obsInfo,        setObsInfo]        = useState(null)
   const [screens,       setScreens]       = useState([])
   const [selectedScreen,setSelectedScreen]= useState(rec.display || null)
-  const [audioDevices,  setAudioDevices]  = useState({ microphones: [], systemOutputs: [] })
-  const [autoFullscreen,setAutoFullscreen]= useState(rec.autoFullscreen !== false)
-  const [waitSecs,      setWaitSecs]      = useState(rec.waitBeforeRecord ?? 5)
+  const [autoFullscreen,    setAutoFullscreen]    = useState(rec.autoFullscreen !== false)
+  const [waitSecs,          setWaitSecs]          = useState(rec.waitBeforeRecord ?? 5)
+  const [postCompress,      setPostCompress]      = useState(rec.postCompress !== false)
+  const [postCompressMode,  setPostCompressMode]  = useState(rec.postCompressMode || 'smart')
   const [saved,         setSaved]         = useState(false)
   const [loadingScreens,setLoadingScreens]= useState(false)
+
+  // ── Resolution options — context-aware based on the selected screen ───────────
+  // The top "native" option always reflects the actual recording source so the
+  // connection between screen picker and resolution is obvious.
+  const resolutionOptions = useMemo(() => {
+    let nativeW, nativeH
+
+    if (selectedScreen?.bounds) {
+      // A specific screen is selected — use its exact dimensions
+      nativeW = selectedScreen.bounds.width
+      nativeH = selectedScreen.bounds.height
+    } else {
+      // "All screens" — recorder.js uses the primary display for 'native'
+      const primary = screens.find(s => s.isPrimary)
+      if (primary?.bounds) {
+        nativeW = primary.bounds.width
+        nativeH = primary.bounds.height
+      } else {
+        // Fallback: largest monitor known to OBS
+        const biggest = (obsInfo?.monitors || []).reduce(
+          (a, m) => (m.height || 0) > (a.height || 0) ? m : a, {}
+        )
+        nativeW = biggest.width  || 1920
+        nativeH = biggest.height || 1080
+      }
+    }
+
+    // Only show downscales strictly below the native height — no duplicates
+    const downscales = [
+      { value: '3840x2160', h: 2160, label: '3840 × 2160  ·  4K'    },
+      { value: '2560x1440', h: 1440, label: '2560 × 1440  ·  2K'    },
+      { value: '1920x1080', h: 1080, label: '1920 × 1080  ·  1080p' },
+      { value: '1280x720',  h: 720,  label: '1280 × 720   ·  720p'  },
+      { value: '854x480',   h: 480,  label: '854 × 480    ·  480p'  },
+    ].filter(r => r.h < nativeH && r.value !== `${nativeW}x${nativeH}`)
+
+    return [
+      { value: 'native', label: `Full screen — ${nativeW} × ${nativeH}` },
+      ...downscales.map(r => ({ value: r.value, label: r.label })),
+    ]
+  }, [obsInfo?.monitors, selectedScreen, screens])
+
+  // ── Encoder list from OBS — available even before OBS connects ─────────────
+  const hwEncoders  = (obsInfo?.encoders || []).filter(e => e.hw)
+  const swEncoders  = (obsInfo?.encoders || []).filter(e => !e.hw)
+  const noEncoders  = !obsInfo?.encoders?.length
+
+  // System audio device options — from OBS WASAPI output capture device list
+  const sysAudioOptions = (obsInfo?.audioOutputs || [])
+    .map(d => ({ label: d.name, value: d.id ?? d.name }))
 
   useEffect(() => {
     window.cueflow?.recordings?.getDefaultPath().then(p => p && setDefaultPath(p))
     window.cueflow?.audio?.getDevices().then(d => d && setAudioDevices(d))
-    loadScreens(false)   // use cache on tab re-open; only detects fresh on first visit
+    loadScreens(false)
+
+    // Poll OBS capabilities every 3 s until connected so the banner updates live.
+    // Stops as soon as the connection is established.
+    let timer
+    const pollObs = async () => {
+      const caps = await window.cueflow?.obs?.getCapabilities()
+      if (caps) setObsInfo(caps)
+      if (!caps?.connected) timer = setTimeout(pollObs, 3000)
+    }
+    pollObs()
+    return () => clearTimeout(timer)
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadScreens = useCallback(async (force = false) => {
@@ -300,18 +382,23 @@ function RecordingTab({ settings, onSave, onPatch }) {
   }
 
   const save = async () => {
+    // Derive the legacy codec field from the encoder ID for backward compat
+    const codec = /hevc|h265/i.test(encoder) ? 'h265' : /av1/i.test(encoder) ? 'av1' : 'h264'
     await onSave({
       recording: {
         saveFolder: folder, subfolders: subfolder,
-        resolution, fps: Number(fps), codec, quality: Number(quality),
-        audioMode, audioDevice: audioDevice || null,
+        resolution, fps: Number(fps),
+        encoder, codec,   // encoder = full OBS ID; codec = h264/h265/av1 for compat
+        quality: Number(quality),
+        audioMode, sysAudioDevice: sysAudioDevice || null, micDevice: micDevice || null,
         // Save only metadata — never persist the thumbnail (bloats settings.json)
         display: selectedScreen ? {
           id: selectedScreen.id, name: selectedScreen.name,
           bounds: selectedScreen.bounds, scaleFactor: selectedScreen.scaleFactor,
           isPrimary: selectedScreen.isPrimary
         } : null,
-        autoFullscreen, waitBeforeRecord: Number(waitSecs)
+        autoFullscreen, waitBeforeRecord: Number(waitSecs),
+        postCompress, postCompressMode
       }
     })
     setSaved(true); setTimeout(() => setSaved(false), 2000)
@@ -321,6 +408,21 @@ function RecordingTab({ settings, onSave, onPatch }) {
   // parent state so switching tabs and returning keeps the selection.
   const selectScreen = async (src) => {
     setSelectedScreen(src)
+
+    if (resolution !== 'native') {
+      const [resW, resH] = resolution.split('x').map(Number)
+      if (src?.bounds) {
+        // Normalize: if saved resolution exactly matches the new screen's native, switch to 'native'
+        // so the "Full screen — WxH" option is selected rather than nothing.
+        if (resW === src.bounds.width && resH === src.bounds.height) {
+          setResolution('native')
+        } else if (src.bounds.height < resH) {
+          // Screen is smaller than the saved resolution — downgrade
+          setResolution('native')
+        }
+      }
+    }
+
     const display = src ? {
       id: src.id, name: src.name, bounds: src.bounds,
       scaleFactor: src.scaleFactor, isPrimary: src.isPrimary
@@ -344,11 +446,41 @@ function RecordingTab({ settings, onSave, onPatch }) {
     ? defaultPath.replace(/^.*[/\\]/, '…\\').replace(/\\/g, '\\')
     : 'Documents\\Cueflow\\Recordings'
 
-  const micDevices = audioDevices.microphones || []
-  const sysDevices = audioDevices.systemOutputs || []
+
+  // Mic options: prefer OBS WASAPI list (what OBS actually sees from Windows),
+  // fall back to ffmpeg dshow list when OBS isn't connected yet.
+  const micOptions = (obsInfo?.microphones?.length ? obsInfo.microphones : audioDevices)
+    .map(d => ({ label: d.name, value: d.id ?? d.name }))
 
   return (
     <div className="space-y-4">
+
+      {/* ── OBS Studio banner ─────────────────────────────────────────────── */}
+      <div className={`flex items-center justify-between px-4 py-3 rounded-xl border ${
+        obsInfo?.connected ? 'bg-[#1a1a2e] border-[#302d5a]' : 'bg-zinc-900 border-zinc-800'
+      }`}>
+        <div className="flex items-center gap-2.5">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+            obsInfo?.connected ? 'bg-violet-700' : 'bg-zinc-700'
+          }`}>
+            <ObsLogo size={22} />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-zinc-200">OBS Studio</p>
+            <p className="text-xs text-zinc-500">
+              {obsInfo?.connected
+                ? `v${obsInfo.obsVersion} · Screen capture · WASAPI audio`
+                : 'Not connected — launch Cueflow to start OBS in the background'}
+            </p>
+          </div>
+        </div>
+        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+          obsInfo?.connected ? 'bg-violet-600/20 text-violet-300' : 'bg-zinc-800 text-zinc-500'
+        }`}>
+          {obsInfo?.connected ? <><Wifi size={10} />&nbsp;Connected</> : <><WifiOff size={10} />&nbsp;Offline</>}
+        </div>
+      </div>
+
       {/* Output */}
       <CardSection title="Output">
         <SettingRow label="Save folder" description="Where recordings are saved">
@@ -424,26 +556,53 @@ function RecordingTab({ settings, onSave, onPatch }) {
       <CardSection title="Quality">
         <SettingRow label="Output resolution" description="Full screen captures native resolution then scales down — never crops">
           <select value={resolution} onChange={e => setResolution(e.target.value)}
-            className="w-44 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:outline-none">
-            <option value="native">Full screen (native)</option>
-            <option value="3840x2160">3840 × 2160  —  4K</option>
-            <option value="2560x1440">2560 × 1440  —  2K</option>
-            <option value="1920x1080">1920 × 1080  —  1080p</option>
-            <option value="1280x720">1280 × 720   —  720p</option>
-            <option value="854x480">854 × 480    —  480p</option>
+            className="w-52 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:outline-none">
+            {resolutionOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </select>
         </SettingRow>
         <SettingRow label="Frame rate">
           <select value={fps} onChange={e => setFps(e.target.value)}
             className="w-36 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:outline-none">
-            {['15','24','30','48','60'].map(r => <option key={r} value={r}>{r} fps</option>)}
+            {['15','24','25','30','48','60'].map(r => (
+              <option key={r} value={r}>{r} fps
+                {obsInfo?.videoSettings && Math.round(obsInfo.videoSettings.fps) === Number(r) ? ' (current)' : ''}
+              </option>
+            ))}
           </select>
         </SettingRow>
-        <SettingRow label="Codec">
-          <select value={codec} onChange={e => setCodec(e.target.value)}
-            className="w-36 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:outline-none">
-            <option value="h264">H.264 (best compat)</option>
-            <option value="h265">H.265 (smaller)</option>
+        <SettingRow label="Encoder" description={
+          noEncoders
+            ? 'Launch Cueflow to detect available encoders'
+            : hwEncoders.length > 0
+              ? `${hwEncoders.length} GPU encoder${hwEncoders.length > 1 ? 's' : ''} detected`
+              : 'Software encoding only'
+        }>
+          <select value={encoder} onChange={e => setEncoder(e.target.value)}
+            className="w-52 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:outline-none">
+            {noEncoders ? (
+              // OBS not yet connected — show static fallback so the dropdown isn't blank
+              <>
+                <option value="obs_x264">H.264 · Software (x264)</option>
+                <option value="obs_ffmpeg_hevc_sw">H.265 · Software (HEVC)</option>
+              </>
+            ) : (
+              <>
+                {hwEncoders.length > 0 && (
+                  <optgroup label="Hardware (GPU)">
+                    {hwEncoders.map(enc => (
+                      <option key={enc.id} value={enc.id}>{enc.label}</option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="Software (CPU)">
+                  {swEncoders.map(enc => (
+                    <option key={enc.id} value={enc.id}>{enc.label}</option>
+                  ))}
+                </optgroup>
+              </>
+            )}
           </select>
         </SettingRow>
         <SettingRow label={`Quality — CRF ${quality}`} description="Lower = better quality, larger file. 18–28 is typical.">
@@ -452,9 +611,42 @@ function RecordingTab({ settings, onSave, onPatch }) {
         </SettingRow>
       </CardSection>
 
+      {/* Post-processing */}
+      <CardSection title="Post-processing">
+        <SettingRow
+          label="Compress after recording"
+          description="FFmpeg drops duplicate frames (VFR) and re-encodes — like HandBrake. Runs silently in the background, replaces the file in-place."
+        >
+          <Toggle checked={postCompress} onChange={setPostCompress} />
+        </SettingRow>
+        {postCompress && (
+          <div className="pb-3.5 border-b border-zinc-800/50">
+            <p className="text-xs text-zinc-500 mb-2">Compression mode</p>
+            <div className="flex gap-2">
+              {[
+                { value: 'smart', label: 'Smart', detail: 'HEVC CRF 30 · fast', hint: '70 MB → ~1 MB · seconds' },
+                { value: 'max',   label: 'Max',   detail: 'HEVC CRF 28 · medium', hint: 'Better quality · still fast' },
+              ].map(opt => (
+                <button key={opt.value} onClick={() => setPostCompressMode(opt.value)}
+                  className={`flex-1 py-2.5 px-3 rounded-lg text-left border transition-colors ${
+                    postCompressMode === opt.value
+                      ? 'bg-violet-600/20 border-violet-500/50 text-violet-200'
+                      : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-600'
+                  }`}
+                >
+                  <p className="text-xs font-semibold">{opt.label}</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">{opt.detail}</p>
+                  <p className="text-[10px] mt-0.5 opacity-70">{opt.hint}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardSection>
+
       {/* Audio */}
       <CardSection title="Audio">
-        <SettingRow label="Audio source">
+        <SettingRow label="Audio mode">
           <select value={audioMode} onChange={e => setAudioMode(e.target.value)}
             className="w-44 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:outline-none">
             <option value="system">System audio (what you hear)</option>
@@ -464,22 +656,38 @@ function RecordingTab({ settings, onSave, onPatch }) {
           </select>
         </SettingRow>
 
-        {audioMode === 'system' && sysDevices.length > 1 && (
-          <SettingRow label="Output device" description="Which speaker/headphone output to capture">
-            <select value={audioDevice} onChange={e => setAudioDevice(e.target.value)}
-              className="w-44 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:outline-none">
-              <option value="">Default output device</option>
-              {sysDevices.map(d => <option key={d} value={d}>{d}</option>)}
+        {/* System audio output device — shown when system audio is active */}
+        {(audioMode === 'system' || audioMode === 'both') && (
+          <SettingRow
+            label="System audio device"
+            description={obsInfo?.connected
+              ? `${sysAudioOptions.length} output device${sysAudioOptions.length !== 1 ? 's' : ''} detected by OBS (WASAPI)`
+              : 'Output device OBS will loopback-capture. Leave blank for the Windows default.'}
+          >
+            <select value={sysAudioDevice} onChange={e => setSysAudioDevice(e.target.value)}
+              className="w-52 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-zinc-200 focus:outline-none">
+              <option value="">— default output —</option>
+              {sysAudioOptions.map(d => (
+                <option key={d.value} value={d.value}>{d.label}</option>
+              ))}
             </select>
           </SettingRow>
         )}
 
+        {/* Microphone device — shown when mic capture is active */}
         {(audioMode === 'mic' || audioMode === 'both') && (
-          <SettingRow label="Microphone" description="Input device to record">
-            <select value={audioDevice} onChange={e => setAudioDevice(e.target.value)}
-              className="w-44 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:outline-none">
-              <option value="">Default microphone</option>
-              {micDevices.map(d => <option key={d} value={d}>{d}</option>)}
+          <SettingRow
+            label="Microphone"
+            description={obsInfo?.connected
+              ? `${micOptions.length} input device${micOptions.length !== 1 ? 's' : ''} detected by OBS (WASAPI)`
+              : 'Input device for your voice. Leave blank for the Windows default.'}
+          >
+            <select value={micDevice} onChange={e => setMicDevice(e.target.value)}
+              className="w-52 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-xs text-zinc-200 focus:outline-none">
+              <option value="">— default microphone —</option>
+              {micOptions.map(d => (
+                <option key={d.value} value={d.value}>{d.label}</option>
+              ))}
             </select>
           </SettingRow>
         )}
@@ -515,7 +723,7 @@ function GeneralTab({ settings, onSave }) {
   const gen = settings.general || {}
   const [preventSleep, setPreventSleep] = useState(gen.preventSleep !== false)
   const [checkInterval, setCheckInterval] = useState(gen.checkIntervalMinutes ?? 5)
-  const [gracePeriod, setGracePeriod] = useState(gen.gracePeriodMinutes ?? 45)
+  const gracePeriod = gen.gracePeriodMinutes ?? 45
   const [autoClearDays, setAutoClearDays] = useState(gen.autoClearDays ?? 30)
   const [closeApp, setCloseApp] = useState(gen.closeAppAfterRecord === true)
   const [saved, setSaved] = useState(false)

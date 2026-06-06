@@ -83,6 +83,10 @@ contextBridge.exposeInMainWorld('cueflow', {
     getDefaultPath: () => ipcRenderer.invoke('recordings:getDefaultPath')
   },
 
+  obs: {
+    getCapabilities: () => ipcRenderer.invoke('obs:getCapabilities')
+  },
+
   on: {
     navigate: (cb) => {
       const h = (_, page) => cb(page)

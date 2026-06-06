@@ -165,6 +165,13 @@ class Engine extends EventEmitter {
 
   closeMeeting(url) { return runner.closeApp(url) }
 
+  async switchRecordingDisplay(display) {
+    if (!recorder.isRecording) return false
+    return recorder.switchDisplay(display)
+  }
+
+  maximizeMeetingWindow(url) { runner.maximizeWindow(url) }
+
   async openAndRecord(url) {
     const manualTask = {
       id: crypto.randomUUID(),

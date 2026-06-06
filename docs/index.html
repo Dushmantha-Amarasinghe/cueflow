@@ -4,11 +4,11 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Cueflow — Automated meeting recorder for Windows</title>
-<meta name="description" content="Cueflow watches your Gmail for meeting invites, then automatically joins and records the meeting with ffmpeg — even when you're away. Control it from Telegram." />
+<meta name="description" content="Cueflow watches your Gmail for meeting invites, then automatically joins and records with OBS — compressing to HEVC in the background. Control everything from Telegram." />
 
 <!-- Open Graph / social preview -->
 <meta property="og:title" content="Cueflow — Automated meeting recorder" />
-<meta property="og:description" content="Email → join → record → notify. Fully automated meeting recording for Windows, controllable from Telegram." />
+<meta property="og:description" content="Email → join → record → compress → notify. Fully automated meeting recording for Windows, controllable from Telegram." />
 <meta property="og:type" content="website" />
 <meta property="og:image" content="https://dushmantha-amarasinghe.github.io/cueflow/icon.png" />
 
@@ -31,7 +31,6 @@
     font-family:var(--font);
     line-height:1.6; -webkit-font-smoothing:antialiased; overflow-x:hidden;
   }
-  /* slim scrollbar to match the premium feel */
   ::-webkit-scrollbar{width:6px}
   ::-webkit-scrollbar-track{background:var(--bg)}
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
@@ -39,13 +38,11 @@
   .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
   .accent{color:var(--violet-dim)}
 
-  /* glow background */
   .glow{position:absolute;top:-200px;left:50%;transform:translateX(-50%);
     width:900px;height:600px;border-radius:50%;
     background:radial-gradient(circle,rgba(124,58,237,0.18),transparent 65%);
     filter:blur(40px);pointer-events:none;z-index:0}
 
-  /* nav */
   nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(12px);
     background:rgba(9,9,11,0.7);border-bottom:1px solid var(--border)}
   nav .wrap{display:flex;align-items:center;justify-content:space-between;height:60px}
@@ -56,7 +53,6 @@
   .nav-links .gh{display:flex;align-items:center;gap:6px}
   @media(max-width:680px){.nav-links a:not(.gh){display:none}}
 
-  /* buttons */
   .btn{display:inline-flex;align-items:center;gap:9px;font-weight:600;font-size:15px;
     padding:13px 24px;border-radius:12px;transition:.15s;cursor:pointer;border:1px solid transparent}
   .btn-primary{background:linear-gradient(135deg,var(--violet),var(--violet2));color:#fff;
@@ -66,7 +62,6 @@
   .btn-ghost:hover{background:#222227;border-color:#3a3a42}
   .btn-sm{padding:9px 16px;font-size:13px;border-radius:9px}
 
-  /* hero */
   header{position:relative;text-align:center;padding:90px 0 60px;overflow:hidden}
   .badge{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);
     background:#161619;border:1px solid var(--border);padding:6px 14px;border-radius:999px;margin-bottom:26px}
@@ -77,19 +72,16 @@
   .cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:38px;position:relative;z-index:1}
   .cta .note{width:100%;font-size:13px;color:var(--dim);margin-top:6px}
 
-  /* hero shot */
   .hero-shot{position:relative;z-index:1;margin:60px auto 0;max-width:920px;
     border:1px solid var(--border);border-radius:16px;overflow:hidden;
     box-shadow:0 30px 80px rgba(0,0,0,0.6)}
   .hero-shot img{display:block;width:100%}
 
-  /* sections */
   section{position:relative;padding:80px 0}
   .eyebrow{color:var(--violet-dim);font-weight:700;font-size:12px;letter-spacing:1.8px;text-transform:uppercase;text-align:center}
   h2{font-size:clamp(27px,4vw,40px);font-weight:800;letter-spacing:-1px;text-align:center;margin-top:12px}
   .section-sub{color:var(--muted);text-align:center;max-width:580px;margin:16px auto 0;font-size:16px;line-height:1.7}
 
-  /* demo */
   .demo-frame{margin:46px auto 0;max-width:760px;border:1px solid var(--border);border-radius:16px;
     background:var(--card);overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,0.5)}
   .demo-frame img{display:block;width:100%}
@@ -99,7 +91,6 @@
     border:1px solid rgba(124,58,237,0.4);display:flex;align-items:center;justify-content:center}
   .demo-ph .play::before{content:"";border-left:18px solid var(--violet-dim);border-top:11px solid transparent;border-bottom:11px solid transparent;margin-left:5px}
 
-  /* features */
   .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:50px}
   @media(max-width:860px){.grid{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:560px){.grid{grid-template-columns:1fr}}
@@ -114,7 +105,6 @@
   .feature h3{font-size:17px;font-weight:700;letter-spacing:-0.3px;margin-bottom:7px}
   .feature p{font-size:14px;color:var(--muted);line-height:1.6}
 
-  /* steps */
   .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:50px}
   @media(max-width:760px){.steps{grid-template-columns:1fr}}
   .step{text-align:center;padding:10px}
@@ -123,22 +113,18 @@
   .step h3{font-size:17px;margin-bottom:8px}
   .step p{font-size:14px;color:var(--muted)}
 
-  /* screenshots */
   .shots{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:50px}
   @media(max-width:760px){.shots{grid-template-columns:1fr}}
   .shot{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--card);box-shadow:0 14px 40px rgba(0,0,0,0.4)}
   .shot img{display:block;width:100%}
   .shot .cap{padding:13px 18px;font-size:13px;color:var(--muted);border-top:1px solid var(--border)}
 
-  /* tech */
   .tech{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:40px}
   .pill{font-size:13px;color:var(--muted);background:#161619;border:1px solid var(--border);padding:8px 16px;border-radius:999px}
 
-  /* final cta */
   .final{text-align:center;background:linear-gradient(180deg,transparent,rgba(124,58,237,0.06));
     border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
 
-  /* footer */
   footer{padding:40px 0;color:var(--dim);font-size:13px}
   footer .wrap{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
   footer a{color:var(--muted)}footer a:hover{color:var(--text)}
@@ -169,11 +155,11 @@
   <div class="wrap">
     <span class="badge"><span class="dot"></span> Free &amp; open source · Windows</span>
     <h1>Your meetings,<br/>recorded automatically.</h1>
-    <p class="sub">Cueflow watches your Gmail for meeting invitations, then automatically joins and records the meeting with ffmpeg — <span class="accent">even when you're away from your computer</span>. Control everything from Telegram.</p>
+    <p class="sub">Cueflow watches your Gmail for meeting invitations, then automatically joins and records with OBS — compressing to <span class="accent">HEVC in the background</span>. Control everything from Telegram, even from your phone.</p>
     <div class="cta">
       <a class="btn btn-primary" href="https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest/download/Cueflow-Setup.exe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5v11"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M5 19.5h14"/></svg> Download for Windows</a>
       <a class="btn btn-ghost" href="https://github.com/Dushmantha-Amarasinghe/cueflow" target="_blank">View on GitHub</a>
-      <span class="note">v0.1.0 · Windows 10/11 · ~97 MB · ffmpeg bundled</span>
+      <span class="note">v0.1.0 · Windows 10/11 · OBS + ffmpeg bundled, nothing else to install</span>
     </div>
 
     <div class="hero-shot">
@@ -187,10 +173,8 @@
   <div class="wrap">
     <p class="eyebrow">See it in action</p>
     <h2>Join &amp; record from your phone</h2>
-    <p class="section-sub">Out at dinner when a lecture starts? Paste the meeting link to your Telegram bot — your PC at home opens it and starts recording. You get the file when it's done.</p>
+    <p class="section-sub">Out at dinner when a lecture starts? Paste the meeting link to your Telegram bot — your PC at home opens it, starts recording, compresses the file, and sends it right back when done.</p>
     <div class="demo-frame">
-      <!-- Replace this placeholder with a real demo GIF: drop it at docs/screenshots/demo.gif
-           and change the block below to <img src="./screenshots/demo.gif" alt="Cueflow demo"/> -->
       <div class="demo-ph">
         <div class="play"></div>
         <div style="font-size:15px;color:var(--muted);font-weight:600">Demo video coming soon</div>
@@ -206,12 +190,43 @@
     <p class="eyebrow">Everything you need</p>
     <h2>Set it once. It handles the rest.</h2>
     <div class="grid">
-      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M3 7l9 6 9-6"/></svg></div><h3>Email-triggered</h3><p>Watches your Gmail inbox over IMAP and detects meeting invitations automatically. No OAuth — just a Google App Password.</p></div>
-      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg></div><h3>Calendar-aware</h3><p>Parses ICS attachments and recurring events to schedule recordings days in advance, so nothing slips through.</p></div>
-      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="M15.5 10l6-3.5v11l-6-3.5"/></svg></div><h3>ffmpeg recording</h3><p>Bundled ffmpeg captures your screen with system audio. Multi-monitor selection, native resolution, MKV→MP4.</p></div>
-      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 4.5 13.5 11 13.5 10 22 19.5 10 13 10 13 2"/></svg></div><h3>Flows</h3><p>Independent, named automation pipelines with subject/sender filters. Run many in parallel, enable or pause each one.</p></div>
-      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 3L2.5 11l7 2.5 2.5 7L21.5 3z"/><path d="M21.5 3L9.5 13.5"/></svg></div><h3>Telegram control</h3><p>Rich notifications and inline buttons. Join meetings, stop recordings, and get the file — all from your phone.</p></div>
-      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l8 3v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10v-6l8-3z"/><path d="M9 12l2 2 4-4"/></svg></div><h3>100% local &amp; private</h3><p>No cloud, no account, no server. Credentials are encrypted on your machine. Your recordings never leave your PC.</p></div>
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M3 7l9 6 9-6"/></svg></div>
+        <h3>Email-triggered</h3>
+        <p>Watches your Gmail inbox over IMAP and detects meeting invitations automatically. No OAuth — just a Google App Password.</p>
+      </div>
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg></div>
+        <h3>Calendar-aware</h3>
+        <p>Parses ICS attachments and recurring events to schedule recordings days in advance, so nothing slips through.</p>
+      </div>
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="M15.5 10l6-3.5v11l-6-3.5"/></svg></div>
+        <h3>OBS recording</h3>
+        <p>Bundled OBS captures your screen at full quality — multi-monitor selection, native resolution, CRF quality slider, system audio or mic or both.</p>
+      </div>
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16.5L12 21l8-4.5V7.5L12 3 4 7.5v9z"/><path d="M12 3v18M4 7.5l8 4.5 8-4.5"/></svg></div>
+        <h3>HEVC compression</h3>
+        <p>After recording, bundled ffmpeg silently re-encodes to x265 in the background. A 70 MB lecture becomes ~1 MB — without visible quality loss.</p>
+      </div>
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 3L2.5 11l7 2.5 2.5 7L21.5 3z"/><path d="M21.5 3L9.5 13.5"/></svg></div>
+        <h3>Telegram control</h3>
+        <p>Live screen switcher during recording — view screenshots, switch capture to another monitor, retry window maximize. Stop recording, get the compressed file, manage flows — all from your phone.</p>
+      </div>
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 4.5 13.5 11 13.5 10 22 19.5 10 13 10 13 2"/></svg></div>
+        <h3>Flows</h3>
+        <p>Independent, named automation pipelines with subject/sender filters. Run many in parallel, enable or pause each one from the app or Telegram.</p>
+      </div>
+
     </div>
   </div>
 </section>
@@ -222,9 +237,9 @@
     <p class="eyebrow">How it works</p>
     <h2>From email to recording, automatically</h2>
     <div class="steps">
-      <div class="step"><div class="num">1</div><h3>Connect Gmail</h3><p>Paste your address and a Google App Password. Optionally connect a Telegram bot for remote control.</p></div>
-      <div class="step"><div class="num">2</div><h3>Create a Flow</h3><p>Set a subject filter (e.g. your course name) and the meeting type. Cueflow starts watching your inbox.</p></div>
-      <div class="step"><div class="num">3</div><h3>Walk away</h3><p>When a matching meeting arrives, Cueflow joins it, records it, saves the file, and pings you on Telegram.</p></div>
+      <div class="step"><div class="num">1</div><h3>Connect Gmail</h3><p>Paste your address and a Google App Password. Optionally connect a Telegram bot for remote control and file delivery.</p></div>
+      <div class="step"><div class="num">2</div><h3>Create a Flow</h3><p>Set a subject filter (e.g. your course name) and the meeting type. Cueflow starts watching your inbox and schedules recordings automatically.</p></div>
+      <div class="step"><div class="num">3</div><h3>Walk away</h3><p>When a matching meeting arrives, Cueflow joins it, records with OBS, compresses to HEVC, and delivers the file to your Telegram chat.</p></div>
     </div>
   </div>
 </section>
@@ -237,8 +252,56 @@
     <div class="shots">
       <div class="shot"><img src="./screenshots/dashboard.png" alt="Dashboard"/><div class="cap">Dashboard — live status, next session, and what's coming up</div></div>
       <div class="shot"><img src="./screenshots/flows.png" alt="Flows"/><div class="cap">Flows — your automation pipelines at a glance</div></div>
-      <div class="shot"><img src="./screenshots/recording.png" alt="Recording settings"/><div class="cap">Recording — screen, resolution, audio, and quality</div></div>
-      <div class="shot"><img src="./screenshots/settings.png" alt="Settings"/><div class="cap">Settings — updates, about &amp; open source</div></div>
+      <div class="shot"><img src="./screenshots/recording.png" alt="Recording settings"/><div class="cap">Recording — screen, encoder, resolution, audio, quality &amp; post-compression</div></div>
+      <div class="shot"><img src="./screenshots/settings.png" alt="Settings"/><div class="cap">Settings — connections, Telegram, and about</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- TELEGRAM DETAIL -->
+<section style="background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+  <div class="wrap">
+    <p class="eyebrow">Telegram bot</p>
+    <h2>Full remote control from your phone</h2>
+    <p class="section-sub">Once connected, the bot handles the whole workflow — you never need to be at your PC.</p>
+    <div class="grid" style="margin-top:40px">
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+        <h3>Live screen control</h3>
+        <p>During recording, tap <b>View screens</b> to get a screenshot of every monitor. Switch the capture to a different screen with one tap — OBS hot-switches without restarting.</p>
+      </div>
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></div>
+        <h3>Window maximize</h3>
+        <p>Cueflow auto-maximizes the meeting window before recording. If a window opened late or on the wrong screen, tap <b>Retry maximize</b> — it finds the window by title across all processes.</p>
+      </div>
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+        <h3>File delivery</h3>
+        <p>When recording is done the compressed file is sent straight to Telegram. If it's under 50 MB it uploads directly; larger files are compressed further first.</p>
+      </div>
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <h3>Schedule &amp; flows</h3>
+        <p>Check upcoming sessions, cancel individual recordings, pause or resume flows — all without opening the app. Use <b>/schedule</b>, <b>/flows</b>, <b>/stop</b> and more.</p>
+      </div>
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div>
+        <h3>Compression status</h3>
+        <p>You're notified when compression starts, and again when it finishes — with before/after file sizes. A 45 MB OBS recording becomes 1 MB in seconds while you wait.</p>
+      </div>
+
+      <div class="feature">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+        <h3>Instant join</h3>
+        <p>Paste any Zoom, Teams, or Google Meet URL directly into the chat — Cueflow opens it and starts recording immediately, no scheduling needed.</p>
+      </div>
+
     </div>
   </div>
 </section>
@@ -248,9 +311,14 @@
   <div class="wrap">
     <p class="eyebrow">Built with</p>
     <div class="tech">
-      <span class="pill">Electron</span><span class="pill">React</span><span class="pill">ffmpeg</span>
-      <span class="pill">Node.js</span><span class="pill">IMAP</span><span class="pill">node-ical</span>
-      <span class="pill">Telegraf</span><span class="pill">SQLite</span>
+      <span class="pill">Electron</span>
+      <span class="pill">React</span>
+      <span class="pill">OBS Studio</span>
+      <span class="pill">ffmpeg · libx265</span>
+      <span class="pill">Node.js</span>
+      <span class="pill">IMAP</span>
+      <span class="pill">node-ical</span>
+      <span class="pill">Telegraf</span>
     </div>
   </div>
 </section>
