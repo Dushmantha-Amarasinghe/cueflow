@@ -152,11 +152,11 @@ Pull requests are welcome. For major changes please open an issue first.
 3. Commit your changes
 4. Push and open a PR
 
-## ❤️ Support
+## Support
 
-If Cueflow saves you time, consider supporting development:
+If Cueflow saves you time:
 
-[![Donate via PayPal](https://img.shields.io/badge/Donate-PayPal-blue?style=flat-square&logo=paypal)](https://www.paypal.com/donate?business=dsbamarasinghe1234@gmail.com&currency_code=USD&amount=5)
+[![Buy me a coffee](https://img.shields.io/badge/Buy_me_a_coffee-PayPal-f59e0b?style=flat-square&logo=paypal&logoColor=white)](https://www.paypal.com/donate?business=dsbamarasinghe1234@gmail.com&currency_code=USD&amount=5)
 
 ## 📄 License
 
