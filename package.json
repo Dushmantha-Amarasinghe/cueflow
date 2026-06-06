@@ -1,6 +1,6 @@
 {
   "name": "cueflow",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Automated meeting recorder triggered by email",
   "author": {
     "name": "Cueflow",
@@ -76,7 +76,10 @@
       "out/**/*"
     ],
     "extraResources": [
-      "resources/**/*"
+      {
+        "from": "resources",
+        "to": "."
+      }
     ]
   }
 }
