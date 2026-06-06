@@ -1,5 +1,15 @@
 import React from 'react'
-import { LayoutDashboard, GitBranch, Clock, Settings, Heart, Download } from 'lucide-react'
+import { LayoutDashboard, GitBranch, Clock, Settings, Download } from 'lucide-react'
+
+const CoffeeIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 8h1a4 4 0 0 1 0 8h-1"/>
+    <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/>
+    <line x1="6" y1="2" x2="6" y2="4"/>
+    <line x1="10" y1="2" x2="10" y2="4"/>
+    <line x1="14" y1="2" x2="14" y2="4"/>
+  </svg>
+)
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -60,12 +70,12 @@ export default function Sidebar({ currentPage, onNavigate, status = 'idle', upda
           </button>
         )}
 
-        {/* Donate */}
+        {/* Coffee */}
         <button
           onClick={() => window.cueflow?.shell.openExternal('https://www.paypal.com/donate?business=dsbamarasinghe1234@gmail.com&currency_code=USD&amount=5')}
-          className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-zinc-600 hover:text-pink-400 hover:bg-pink-500/8 transition-colors"
+          className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-zinc-600 hover:text-amber-400 hover:bg-amber-500/8 transition-colors"
         >
-          <Heart size={13} />
+          <CoffeeIcon />
           <span className="text-xs">Support Cueflow</span>
         </button>
 

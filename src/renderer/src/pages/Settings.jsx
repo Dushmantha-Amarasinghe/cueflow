@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Mail, Video, Settings as Cog, Info, Eye, EyeOff, Check, X, FolderOpen, RefreshCw, ExternalLink, Monitor, Heart, Download, Wifi, WifiOff } from 'lucide-react'
+import { Mail, Video, Settings as Cog, Info, Eye, EyeOff, Check, X, FolderOpen, RefreshCw, ExternalLink, Monitor, Download, Wifi, WifiOff } from 'lucide-react'
+
+const CoffeeIcon = ({ size = 11 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 8h1a4 4 0 0 1 0 8h-1"/>
+    <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/>
+    <line x1="6" y1="2" x2="6" y2="4"/>
+    <line x1="10" y1="2" x2="10" y2="4"/>
+    <line x1="14" y1="2" x2="14" y2="4"/>
+  </svg>
+)
 import Logo from '../components/Logo'
 
 // OBS Studio logo — three-arc iris + outer ring + center dot
@@ -854,10 +864,10 @@ function AboutTab() {
             <ExternalLink size={11} /> View on GitHub
           </button>
         </SettingRow>
-        <SettingRow label="Support" description="If Cueflow saves you time, consider a donation">
+        <SettingRow label="Support" description="If Cueflow saves you time, buy me a coffee">
           <button onClick={() => window.cueflow?.shell.openExternal('https://www.paypal.com/donate?business=dsbamarasinghe1234@gmail.com&currency_code=USD&amount=5')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 hover:text-pink-400 transition-colors group">
-            <Heart size={11} className="group-hover:fill-pink-400 transition-colors" /> Donate
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 hover:text-amber-400 transition-colors">
+            <CoffeeIcon /> Buy me a coffee
           </button>
         </SettingRow>
       </CardSection>
