@@ -16,7 +16,7 @@ Cueflow watches your Gmail inbox for meeting invitations, extracts the schedule 
 
 ### [⬇ Download for Windows](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest/download/Cueflow-Setup.exe) · [🌐 Website](https://dushmantha-amarasinghe.github.io/cueflow/) · [🐛 Report a Bug](https://github.com/Dushmantha-Amarasinghe/cueflow/issues)
 
-<img src="docs/screenshots/dashboard.png" width="760" alt="Cueflow dashboard" />
+<img src="docs/screenshots/Demo.gif" width="760" alt="Cueflow demo" />
 
 </div>
 

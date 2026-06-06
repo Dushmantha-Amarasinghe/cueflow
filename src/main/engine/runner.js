@@ -284,41 +284,82 @@ function waitForProcessClose(name, shouldStop = () => false) {
 // The maximize logic needs literal double quotes (DllImport("user32.dll")) which
 // don't survive cmd.exe's quoting when passed inline. Write it to a temp .ps1 and
 // run with -File instead — no escaping headaches, supports here-strings.
-const MAXIMIZE_PS1 = path.join(os.tmpdir(), 'cueflow-maximize-v3.ps1')
+const MAXIMIZE_PS1 = path.join(os.tmpdir(), 'cueflow-maximize-v5.ps1')
 let _ps1Written = false
 
 function ensureMaximizeScript() {
   if (_ps1Written) return
-  // Strategy 1: search ALL processes for one whose MainWindowTitle contains the hint.
-  //   This finds "Zoom Meeting" regardless of which exe name it runs under.
-  // Strategy 2: fallback to any main window of the named process.
+  // Enumerates ALL top-level windows via EnumWindows (not just MainWindowHandle),
+  // filters to those owned by any process whose name starts with the app name,
+  // then picks the window whose title contains the hint — or the largest window
+  // as fallback (the meeting window is always the biggest Zoom window).
+  // NOTE: $candidates is collected via pipeline OUTPUT, not $candidates += inside
+  // ForEach-Object. += inside a pipeline scriptblock only modifies a local copy;
+  // the outer variable is never updated (PowerShell child-scope rule).
   const script = `param([string]$Name, [string]$Hint)
 Add-Type @"
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
-public class WinMax {
+using System.Text;
+public class WinFind {
+  public delegate bool EnumWinCb(IntPtr h, IntPtr lp);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWinCb cb, IntPtr lp);
+  [DllImport("user32.dll")] public static extern int  GetWindowText(IntPtr h, StringBuilder s, int m);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [StructLayout(LayoutKind.Sequential)]
+  public struct RECT { public int L, T, R, B; }
+  public static List<IntPtr> AllWindows() {
+    var list = new List<IntPtr>();
+    EnumWindows((h, lp) => { list.Add(h); return true; }, IntPtr.Zero);
+    return list;
+  }
 }
 "@
 $lhint = $Hint.ToLower()
-$target = [IntPtr]::Zero
+$lname = $Name.ToLower()
 
-if ($lhint) {
-  $m = Get-Process -ErrorAction SilentlyContinue |
-    Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle.ToLower().Contains($lhint) } |
-    Select-Object -First 1
-  if ($m) { $target = $m.MainWindowHandle }
+$appPids = New-Object System.Collections.Generic.HashSet[uint32]
+Get-Process -ErrorAction SilentlyContinue |
+  Where-Object { $_.ProcessName.ToLower().StartsWith($lname) } |
+  ForEach-Object { [void]$appPids.Add([uint32]$_.Id) }
+
+if ($appPids.Count -eq 0) { exit }
+
+# Each matching window is EMITTED by the scriptblock and collected by the pipeline.
+# This is the correct pattern — $var += inside ForEach-Object only modifies a
+# local copy and the outer array stays empty.
+$candidates = @([WinFind]::AllWindows() | ForEach-Object {
+  $h = $_
+  if (-not [WinFind]::IsWindowVisible($h)) { return }
+  $wpid = [uint32]0
+  [void][WinFind]::GetWindowThreadProcessId($h, [ref]$wpid)
+  if (-not $appPids.Contains($wpid)) { return }
+  $sb = New-Object System.Text.StringBuilder 512
+  [void][WinFind]::GetWindowText($h, $sb, 512)
+  $title = $sb.ToString()
+  if ($title.Length -eq 0) { return }
+  $r = New-Object WinFind+RECT
+  [void][WinFind]::GetWindowRect($h, [ref]$r)
+  $area = [long]($r.R - $r.L) * ($r.B - $r.T)
+  [pscustomobject]@{ Handle=$h; Title=$title; Area=$area }
+})
+
+if ($candidates.Count -eq 0) { exit }
+
+$found = $candidates |
+  Where-Object { $_.Title.ToLower().Contains($lhint) } |
+  Sort-Object Area -Descending | Select-Object -First 1
+if (-not $found) {
+  $found = $candidates | Sort-Object Area -Descending | Select-Object -First 1
 }
-if ($target -eq [IntPtr]::Zero -and $Name) {
-  $m = Get-Process $Name -ErrorAction SilentlyContinue |
-    Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
-  if ($m) { $target = $m.MainWindowHandle }
-}
-if ($target -ne [IntPtr]::Zero) {
-  [WinMax]::ShowWindow($target, 3) | Out-Null
-  [WinMax]::SetForegroundWindow($target) | Out-Null
-}
+
+[WinFind]::ShowWindow($found.Handle, 3) | Out-Null
+[WinFind]::SetForegroundWindow($found.Handle) | Out-Null
 `
   try { fs.writeFileSync(MAXIMIZE_PS1, script, 'utf8'); _ps1Written = true }
   catch (e) { console.warn('[runner] could not write maximize script:', e.message) }
