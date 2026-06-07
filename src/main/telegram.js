@@ -15,6 +15,7 @@ const { Telegraf, Markup } = require('telegraf')
 
 let bot = null
 let authorizedChatId = null
+let _watchdog = null
 
 // Telegram Bot API caps bot uploads at 50 MB
 const TG_UPLOAD_LIMIT = 50 * 1024 * 1024
@@ -898,11 +899,32 @@ export async function startBot() {
     )
   })
 
+  bot.catch((err) => {
+    console.error('[telegram] unhandled handler error:', err.message)
+  })
+
   bot.launch({ dropPendingUpdates: true })
   console.log('[telegram] Bot started')
+
+  // heartbeat: if getMe() fails the polling connection has died — restart silently
+  clearInterval(_watchdog)
+  _watchdog = setInterval(async () => {
+    if (!bot) return
+    try {
+      await bot.telegram.getMe()
+    } catch {
+      console.warn('[telegram] heartbeat failed — restarting bot')
+      try { bot.stop(); bot = null } catch {}
+      try { await startBot() } catch (e) {
+        console.error('[telegram] restart failed:', e.message)
+      }
+    }
+  }, 3 * 60 * 1000)
 }
 
 export async function stopBot() {
+  clearInterval(_watchdog)
+  _watchdog = null
   if (bot) { bot.stop(); bot = null }
 }
 
