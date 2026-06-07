@@ -14,7 +14,7 @@
 
 Cueflow watches your Gmail inbox for meeting invitations, extracts the schedule from ICS attachments, then automatically joins and records with OBS — compressing to HEVC in the background. Control everything from Telegram, even from your phone.
 
-### [⬇ Download for Windows](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest/download/Cueflow-Setup.exe) · [🌐 Website](https://dushmantha-amarasinghe.github.io/cueflow/) · [🐛 Report a Bug](https://github.com/Dushmantha-Amarasinghe/cueflow/issues)
+### [Download for Windows](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest/download/Cueflow-Setup.exe) · [Website](https://dushmantha-amarasinghe.github.io/cueflow/) · [Report a Bug](https://github.com/Dushmantha-Amarasinghe/cueflow/issues)
 
 <img src="docs/screenshots/Demo.gif" width="760" alt="Cueflow demo" />
 
@@ -22,13 +22,13 @@ Cueflow watches your Gmail inbox for meeting invitations, extracts the schedule 
 
 ---
 
-## 📱 The killer feature: join from your phone
+## The killer feature: control from your phone
 
 Out at dinner when a lecture starts? **Paste the meeting link to your Telegram bot** — your PC at home opens it, starts recording, compresses the file to HEVC, and sends it right back to your chat. Stop, check status, switch screens, manage flows — all remotely.
 
 ---
 
-## ✨ Features
+## Features
 
 - **Email-triggered automation** — watches Gmail via IMAP, no OAuth required (App Password only)
 - **ICS/calendar aware** — parses `.ics` attachments and recurring events to schedule recordings in advance
@@ -40,15 +40,15 @@ Out at dinner when a lecture starts? **Paste the meeting link to your Telegram b
 - **Auto-update** — checks GitHub Releases on startup and notifies you when a new version is available
 - **100% local** — no cloud, no central server, no subscription; credentials encrypted via Electron safeStorage
 
-## 📥 Download
+## Download
 
-[**⬇ Download the latest installer**](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest/download/Cueflow-Setup.exe) — OBS and ffmpeg are bundled, nothing else to install.
+[**Download the latest installer**](https://github.com/Dushmantha-Amarasinghe/cueflow/releases/latest/download/Cueflow-Setup.exe) — OBS and ffmpeg are bundled, nothing else to install.
 
 > **Requirements:** Windows 10 / 11 (64-bit). Zoom, Teams, or any meeting app already installed.
 >
 > **Note:** Cueflow isn't code-signed yet, so Windows SmartScreen may warn about an "unknown publisher." Click **More info → Run anyway** — the full source is here if you'd like to verify or build it yourself.
 
-## 🖼️ Screenshots
+## Screenshots
 
 | | |
 |---|---|
@@ -57,7 +57,7 @@ Out at dinner when a lecture starts? **Paste the meeting link to your Telegram b
 | ![Recording](docs/screenshots/recording.png) | ![Settings](docs/screenshots/settings.png) |
 | **Recording** — screen, encoder, audio & post-compression | **Settings** — connections, Telegram & about |
 
-## 🚀 Getting started
+## Getting started
 
 1. Run the installer — OBS and ffmpeg are bundled, nothing else to install
 2. On first launch the setup wizard guides you through:
@@ -66,7 +66,7 @@ Out at dinner when a lecture starts? **Paste the meeting link to your Telegram b
 3. Go to **Flows → New Flow**, set a subject filter (e.g. `"Zoom"`) and choose your meeting type
 4. That's it — Cueflow monitors your inbox and records matching meetings automatically
 
-## 📱 Telegram bot commands
+## Telegram bot commands
 
 | Command | Description |
 |---------|-------------|
@@ -83,7 +83,7 @@ Out at dinner when a lecture starts? **Paste the meeting link to your Telegram b
 
 During a recording, inline buttons let you **view screenshots**, **switch capture screen**, **retry maximize**, and **stop** — all without opening the app.
 
-## 🔧 Configuration
+## Configuration
 
 ### Gmail App Password
 
@@ -107,12 +107,12 @@ Google App Passwords let Cueflow access your inbox without your real password an
 | Save folder | `Documents\Cueflow\Recordings` | Subfolders per flow optional |
 | Resolution | Native (full screen) | Can scale down to 1080p, 720p, etc. |
 | Frame rate | 30 fps | |
-| Encoder | H.264 Software (x264) | NVENC, AMF, QuickSync detected automatically |
-| Quality (CRF) | 23 | 0 = lossless, 51 = smallest; 18–28 recommended |
+| Encoder | H.265 Software (HEVC) | NVENC, AMF, QuickSync detected automatically |
+| Quality (CRF) | 28 | 0 = lossless, 51 = smallest; 18–28 recommended |
 | Audio | System audio (WASAPI loopback) | Mic, both, or none also available |
 | Post-compression | On (Smart) | HEVC CRF 30 · fast — re-encodes in background after recording |
 
-## 🏗️ Building from source
+## Building from source
 
 ```bash
 # Prerequisites: Node.js 18+, Git
@@ -130,7 +130,7 @@ npm run dist
 
 The installer will be in `dist/`.
 
-## 📦 Tech stack
+## Tech stack
 
 | Layer | Technology |
 |-------|-----------|
@@ -143,7 +143,7 @@ The installer will be in `dist/`.
 | Storage | JSON files (local, encrypted credentials via Electron safeStorage) |
 | Auto-update | electron-updater + GitHub Releases |
 
-## 🤝 Contributing
+## Contributing
 
 Pull requests are welcome. For major changes please open an issue first.
 
@@ -158,7 +158,7 @@ If Cueflow saves you time:
 
 [![Buy me a coffee](https://img.shields.io/badge/Buy_me_a_coffee-PayPal-f59e0b?style=flat-square&logo=paypal&logoColor=white)](https://www.paypal.com/donate?business=dsbamarasinghe1234@gmail.com&currency_code=USD&amount=5)
 
-## 📄 License
+## License
 
 [MIT](LICENSE) — free to use, modify, and distribute.
 

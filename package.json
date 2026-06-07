@@ -1,6 +1,6 @@
 {
   "name": "cueflow",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Automated meeting recorder triggered by email",
   "author": {
     "name": "Cueflow",

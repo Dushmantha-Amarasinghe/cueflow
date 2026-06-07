@@ -776,8 +776,13 @@ function GeneralTab({ settings, onSave }) {
 // ─── About tab ─────────────────────────────────────────────────────────────────
 
 function AboutTab() {
-  const [updateState, setUpdateState] = useState('idle') // idle | checking | available | latest | error
-  const [info, setInfo] = useState(null)                 // { version, downloadUrl, pageUrl, notes }
+  const [updateState, setUpdateState] = useState('idle')
+  const [info, setInfo] = useState(null)
+  const [appVersion, setAppVersion] = useState('')
+
+  useEffect(() => {
+    window.cueflow?.app.getState().then(s => s?.version && setAppVersion(s.version))
+  }, [])
 
   const checkForUpdates = async () => {
     setUpdateState('checking')
@@ -831,7 +836,7 @@ function AboutTab() {
           <Logo size={56} className="shadow-lg shadow-violet-500/20" />
           <div className="text-center">
             <p className="text-sm font-semibold text-zinc-100">Cueflow</p>
-            <p className="text-xs text-zinc-600 mt-0.5">v0.1.0</p>
+            <p className="text-xs text-zinc-600 mt-0.5">{appVersion ? `v${appVersion}` : ''}</p>
           </div>
           <p className="text-xs text-zinc-600 text-center max-w-xs">
             Automated meeting recorder triggered by email.<br />
