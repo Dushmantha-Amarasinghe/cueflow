@@ -284,9 +284,9 @@ function RecordingTab({ settings, onSave, onPatch }) {
   // encoder holds the full OBS encoder ID (e.g. 'obs_nvenc_h264_tex').
   // Falls back from legacy 'codec' field when 'encoder' has never been saved.
   const [encoder,       setEncoder]       = useState(
-    rec.encoder || (rec.codec === 'h265' ? 'obs_ffmpeg_hevc_sw' : 'obs_x264')
+    rec.encoder || (rec.codec === 'h265' ? 'obs_ffmpeg_hevc_sw' : rec.codec === 'h264' ? 'obs_x264' : 'obs_ffmpeg_hevc_sw')
   )
-  const [quality,       setQuality]       = useState(rec.quality ?? 23)
+  const [quality,       setQuality]       = useState(rec.quality ?? 28)
   const [audioMode,      setAudioMode]      = useState(rec.audioMode || 'system')
   const [sysAudioDevice, setSysAudioDevice] = useState(rec.sysAudioDevice || '')
   const [micDevice,      setMicDevice]      = useState(rec.micDevice || '')
@@ -385,9 +385,11 @@ function RecordingTab({ settings, onSave, onPatch }) {
 
   const syncSelection = (srcs) => {
     if (srcs.length > 0) {
-      setSelectedScreen(prev =>
-        prev ? (srcs.find(s => s.id === prev.id) ?? prev) : prev
-      )
+      setSelectedScreen(prev => {
+        if (prev) return srcs.find(s => s.id === prev.id) ?? prev
+        // Nothing saved yet — auto-select the primary screen on first install
+        return srcs.find(s => s.isPrimary) ?? srcs[0]
+      })
     }
   }
 
@@ -520,7 +522,7 @@ function RecordingTab({ settings, onSave, onPatch }) {
             <div>
               <p className="text-sm text-zinc-200">Select screen to record</p>
               <p className="text-xs text-zinc-600 mt-0.5">
-                {selectedScreen ? 'Custom screen selected' : 'All screens (full virtual desktop)'}
+                {selectedScreen ? selectedScreen.name : 'No screen selected'}
               </p>
             </div>
             <button onClick={() => loadScreens(true)} disabled={loadingScreens}
@@ -531,19 +533,6 @@ function RecordingTab({ settings, onSave, onPatch }) {
 
           {screens.length > 0 && (
             <div className="flex gap-2 flex-wrap">
-              {/* "All screens" option */}
-              <button
-                onClick={() => selectScreen(null)}
-                className={`flex flex-col items-center gap-1.5 p-1.5 rounded-lg border transition-colors ${
-                  !selectedScreen ? 'border-violet-500 bg-violet-600/10' : 'border-zinc-700 bg-zinc-800 hover:border-zinc-600'
-                }`}
-              >
-                <div className="w-24 h-14 rounded bg-zinc-700 flex items-center justify-center">
-                  <Monitor size={20} className="text-zinc-500" />
-                </div>
-                <span className="text-xs text-zinc-400">All screens</span>
-              </button>
-
               {screens.map((src) => (
                 <button key={src.id} onClick={() => selectScreen(src)}
                   className={`flex flex-col items-center gap-1.5 p-1.5 rounded-lg border transition-colors ${

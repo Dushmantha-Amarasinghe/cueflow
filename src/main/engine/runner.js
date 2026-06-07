@@ -28,9 +28,7 @@ class Runner {
     this._emitter?.emit('task:running', task)
 
     try {
-      // Open meeting URL — convert Zoom https links to zoommtg:// so Zoom opens
-      // directly. Validate the scheme first: the URL came from a parsed email, so
-      // never hand a file:/javascript:/etc. link to the OS.
+      // convert zoom web links to zoommtg:// and validate before opening
       const openUrl = toDirectUrl(task.meetingUrl)
       if (!isAllowedExternalUrl(openUrl)) {
         throw new Error(`Refusing to open unsafe meeting URL: ${task.meetingUrl}`)
@@ -38,7 +36,6 @@ class Runner {
       await shell.openExternal(openUrl)
       console.log('[runner] Opened:', task.meetingUrl)
 
-      // Wait for meeting app to load
       const flow = store.read('flows', []).find(f => f.id === task.flowId)
       const recSettings = (store.read('settings', {})).recording || {}
       const waitSecs = recSettings.waitBeforeRecord ?? 5
@@ -46,13 +43,11 @@ class Runner {
 
       const autoFullscreen = recSettings.autoFullscreen !== false
 
-      // Maximize the meeting window before recording starts.
       if (autoFullscreen && task.meetingUrl) {
         maximizeMeetingWindow(task.meetingUrl)
         await delay(800)   // let the maximize animation settle
       }
 
-      // Start recording on the screen the user configured in Settings.
       let recordingPath = null
       try {
         recordingPath = await recorder.start(task.flowName || 'Recording')
@@ -74,10 +69,8 @@ class Runner {
         ;[4000, 8000].forEach(ms => setTimeout(() => maximizeMeetingWindow(task.meetingUrl), ms))
       }
 
-      // Wait for meeting to end (respects stop() in all modes)
       await this._waitForEnd(task, flow)
 
-      // Stop recording
       let result = null
       if (recorder.isRecording) {
         result = await recorder.stop()
@@ -85,8 +78,6 @@ class Runner {
           console.log('[runner] Recording saved:', result.path, Math.round(result.bytes / 1024 / 1024) + 'MB')
           this._saveHistory(task, result)
 
-          // Post-recording FFmpeg re-encode — same codec, slower preset → much smaller file.
-          // Runs in background; replaces the OBS file in-place. Default: on.
           const recSettings = (store.read('settings', {})).recording || {}
           if (recSettings.postCompress !== false && result.path) {
             const mode = recSettings.postCompressMode || 'smart'
@@ -106,7 +97,6 @@ class Runner {
         }
       }
 
-      // Auto-close the meeting app if the user enabled it in General settings
       if ((store.read('settings', {})).general?.closeAppAfterRecord) {
         closeMeetingApp(task.meetingUrl)
       }
@@ -132,10 +122,8 @@ class Runner {
     // so the result is captured and _saveHistory is called correctly.
   }
 
-  // Close the meeting app for a given URL (e.g. quit Zoom after recording).
   closeApp(url) { return closeMeetingApp(url) }
 
-  // Re-run the maximize script on demand (e.g. called from Telegram button).
   maximizeWindow(url) { if (url) maximizeMeetingWindow(url) }
 
   async _waitForEnd(task, flow) {
@@ -216,8 +204,7 @@ function detectProcess(url) {
   return 'Zoom'
 }
 
-// Close the meeting application (quit Zoom/Teams). Never kills the browser for
-// Google Meet — that would close all the user's tabs.
+// skips chrome because that would close all the user's tabs
 function closeMeetingApp(url) {
   const name = detectProcess(url)
   if (name === 'chrome') {
@@ -233,7 +220,6 @@ function closeMeetingApp(url) {
 
 function delay(ms) { return new Promise(r => setTimeout(r, ms)) }
 
-// Delay that exits early when shouldStop() returns true
 function cancellableDelay(ms, shouldStop) {
   return new Promise(resolve => {
     const t = setTimeout(resolve, ms)
@@ -252,7 +238,6 @@ function isProcessRunning(name) {
   })
 }
 
-// Polls until process is running OR shouldStop() OR timeout
 function waitForProcess(name, timeout = 30000, shouldStop = () => false) {
   return new Promise(resolve => {
     const start = Date.now()
@@ -267,7 +252,6 @@ function waitForProcess(name, timeout = 30000, shouldStop = () => false) {
   })
 }
 
-// Polls until process is gone OR shouldStop()
 function waitForProcessClose(name, shouldStop = () => false) {
   return new Promise(resolve => {
     const poll = () => {
@@ -281,21 +265,12 @@ function waitForProcessClose(name, shouldStop = () => false) {
   })
 }
 
-// The maximize logic needs literal double quotes (DllImport("user32.dll")) which
-// don't survive cmd.exe's quoting when passed inline. Write it to a temp .ps1 and
-// run with -File instead — no escaping headaches, supports here-strings.
+// written to a temp .ps1 because inline cmd quoting breaks DllImport strings
 const MAXIMIZE_PS1 = path.join(os.tmpdir(), 'cueflow-maximize-v5.ps1')
 let _ps1Written = false
 
 function ensureMaximizeScript() {
   if (_ps1Written) return
-  // Enumerates ALL top-level windows via EnumWindows (not just MainWindowHandle),
-  // filters to those owned by any process whose name starts with the app name,
-  // then picks the window whose title contains the hint — or the largest window
-  // as fallback (the meeting window is always the biggest Zoom window).
-  // NOTE: $candidates is collected via pipeline OUTPUT, not $candidates += inside
-  // ForEach-Object. += inside a pipeline scriptblock only modifies a local copy;
-  // the outer variable is never updated (PowerShell child-scope rule).
   const script = `param([string]$Name, [string]$Hint)
 Add-Type @"
 using System;
@@ -330,9 +305,7 @@ Get-Process -ErrorAction SilentlyContinue |
 
 if ($appPids.Count -eq 0) { exit }
 
-# Each matching window is EMITTED by the scriptblock and collected by the pipeline.
-# This is the correct pattern — $var += inside ForEach-Object only modifies a
-# local copy and the outer array stays empty.
+# emit via pipeline — $candidates += inside ForEach-Object only modifies a local copy
 $candidates = @([WinFind]::AllWindows() | ForEach-Object {
   $h = $_
   if (-not [WinFind]::IsWindowVisible($h)) { return }
@@ -365,12 +338,11 @@ if (-not $found) {
   catch (e) { console.warn('[runner] could not write maximize script:', e.message) }
 }
 
-// Per-platform process + window-title hint for the meeting window
 function meetingTarget(url) {
-  if (/zoom\.us|zoommtg/i.test(url)) return { proc: 'Zoom',     hint: 'Meeting' }
+  if (/zoom\.us|zoommtg/i.test(url)) return { proc: 'Zoom',     hint: 'Zoom Meeting' }
   if (/teams\.microsoft/i.test(url)) return { proc: 'ms-teams', hint: 'Meeting' }
   if (/meet\.google/i.test(url))     return { proc: 'chrome',   hint: 'Meet' }
-  return { proc: 'Zoom', hint: 'Meeting' }
+  return { proc: 'Zoom', hint: 'Zoom Meeting' }
 }
 
 function maximizeMeetingWindow(url) {
