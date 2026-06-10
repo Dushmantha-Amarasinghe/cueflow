@@ -107,7 +107,7 @@ Google App Passwords let Cueflow access your inbox without your real password an
 | Save folder | `Documents\Cueflow\Recordings` | Subfolders per flow optional |
 | Resolution | Native (full screen) | Can scale down to 1080p, 720p, etc. |
 | Frame rate | 30 fps | |
-| Encoder | H.265 Software (HEVC) | NVENC, AMF, QuickSync detected automatically |
+| Encoder | H.264 Software (x264) | NVENC, AMF, QuickSync detected automatically |
 | Quality (CRF) | 28 | 0 = lossless, 51 = smallest; 18–28 recommended |
 | Audio | System audio (WASAPI loopback) | Mic, both, or none also available |
 | Post-compression | On (Smart) | HEVC CRF 30 · fast — re-encodes in background after recording |

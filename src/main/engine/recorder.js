@@ -19,38 +19,99 @@ const SRC_MIC       = 'CF Microphone'
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
+// updates specific key=value pairs within named INI sections without
+// disturbing other keys or sections — creates sections/keys if missing
+function iniSetKeys(filePath, sectionUpdates) {
+  let text = ''
+  try { if (fs.existsSync(filePath)) text = fs.readFileSync(filePath, 'utf8') } catch {}
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+
+  const remaining = {}
+  for (const [sec, kv] of Object.entries(sectionUpdates)) remaining[sec] = { ...kv }
+
+  const lines  = text ? text.split('\n') : []
+  const out    = []
+  let curSec   = null
+
+  for (const line of lines) {
+    const secM = line.match(/^\[(.+)\]$/)
+    if (secM) {
+      if (curSec && remaining[curSec]) {
+        for (const [k, v] of Object.entries(remaining[curSec])) out.push(`${k}=${v}`)
+        delete remaining[curSec]
+      }
+      curSec = secM[1]
+      out.push(line)
+      continue
+    }
+
+    if (curSec && remaining[curSec]) {
+      const eq = line.indexOf('=')
+      if (eq > 0) {
+        const k = line.slice(0, eq).trim()
+        if (k in remaining[curSec]) {
+          out.push(`${k}=${remaining[curSec][k]}`)
+          delete remaining[curSec][k]
+          if (Object.keys(remaining[curSec]).length === 0) delete remaining[curSec]
+          continue
+        }
+      }
+    }
+    out.push(line)
+  }
+
+  if (curSec && remaining[curSec]) {
+    for (const [k, v] of Object.entries(remaining[curSec])) out.push(`${k}=${v}`)
+    delete remaining[curSec]
+  }
+
+  for (const [sec, kv] of Object.entries(remaining)) {
+    if (out.length > 0 && out[out.length - 1] !== '') out.push('')
+    out.push(`[${sec}]`)
+    for (const [k, v] of Object.entries(kv)) out.push(`${k}=${v}`)
+  }
+
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
+  fs.writeFileSync(filePath, out.join('\n'), 'utf8')
+}
+
 function detectEncoders(root) {
-  const dir = path.join(root, 'obs-plugins', '64bit')
-  const has = dll => fs.existsSync(path.join(dir, dll))
+  const pluginDir = path.join(root, 'obs-plugins', '64bit')
+  const binDir    = path.join(root, 'bin', '64bit')
+  const hasDll = dll => fs.existsSync(path.join(pluginDir, dll))
+  const hasBin = exe => fs.existsSync(path.join(binDir, exe))
   const encoders = []
 
-  if (has('obs-x264.dll')) {
-    encoders.push({ id: 'obs_x264',           label: 'H.264 · Software (x264)',     codec: 'h264', hw: false })
-  }
-  if (has('obs-ffmpeg.dll')) {
-    encoders.push({ id: 'obs_ffmpeg_hevc_sw', label: 'H.265 · Software (HEVC)',     codec: 'h265', hw: false })
-  }
-  if (has('obs-nvenc.dll')) {
-    encoders.push({ id: 'obs_nvenc_h264_tex', label: 'H.264 · NVIDIA NVENC',        codec: 'h264', hw: true  })
-    encoders.push({ id: 'obs_nvenc_hevc_tex', label: 'H.265 · NVIDIA NVENC',        codec: 'h265', hw: true  })
-    encoders.push({ id: 'obs_nvenc_av1_tex',  label: 'AV1  · NVIDIA NVENC',         codec: 'av1',  hw: true  })
-  }
-  // AMD AMF
-  if (has('enc-amf.dll')) {
-    encoders.push({ id: 'amd_amf_h264',       label: 'H.264 · AMD AMF',             codec: 'h264', hw: true  })
-    encoders.push({ id: 'amd_amf_h265',       label: 'H.265 · AMD AMF',             codec: 'h265', hw: true  })
-    encoders.push({ id: 'amd_amf_av1',        label: 'AV1  · AMD AMF',              codec: 'av1',  hw: true  })
-  }
-  // Intel QuickSync
-  if (has('obs-qsv11.dll')) {
-    encoders.push({ id: 'obs_qsv11_h264',     label: 'H.264 · Intel QuickSync',     codec: 'h264', hw: true  })
-    encoders.push({ id: 'obs_qsv11_hevc',     label: 'H.265 · Intel QuickSync',     codec: 'h265', hw: true  })
-    encoders.push({ id: 'obs_qsv11_av1',      label: 'AV1  · Intel QuickSync',      codec: 'av1',  hw: true  })
+  // obs-x264.dll — software H.264, always the reliable fallback
+  if (hasDll('obs-x264.dll')) {
+    encoders.push({ id: 'obs_x264',           label: 'H.264 · Software (x264)',  codec: 'h264', hw: false })
   }
 
-  if (encoders.length === 0) {
-    encoders.push({ id: 'obs_x264',           label: 'H.264 · Software (x264)',     codec: 'h264', hw: false })
-    encoders.push({ id: 'obs_ffmpeg_hevc_sw', label: 'H.265 · Software (HEVC)',     codec: 'h265', hw: false })
+  // obs-nvenc.dll — dedicated NVIDIA plugin (OBS 30+); IDs from nvenc.c
+  if (hasDll('obs-nvenc.dll')) {
+    encoders.push({ id: 'obs_nvenc_h264_tex', label: 'H.264 · NVIDIA NVENC',     codec: 'h264', hw: true  })
+    encoders.push({ id: 'obs_nvenc_hevc_tex', label: 'H.265 · NVIDIA NVENC',     codec: 'h265', hw: true  })
+    encoders.push({ id: 'obs_nvenc_av1_tex',  label: 'AV1  · NVIDIA NVENC',      codec: 'av1',  hw: true  })
+  }
+
+  // AMD texture AMF is compiled into obs-ffmpeg.dll; obs-amf-test.exe is the
+  // hardware probe OBS ships alongside it — IDs from texture-amf.cpp
+  if (hasBin('obs-amf-test.exe')) {
+    encoders.push({ id: 'h264_texture_amf',   label: 'H.264 · AMD AMF',          codec: 'h264', hw: true  })
+    encoders.push({ id: 'h265_texture_amf',   label: 'H.265 · AMD AMF',          codec: 'h265', hw: true  })
+    encoders.push({ id: 'av1_texture_amf',    label: 'AV1  · AMD AMF',           codec: 'av1',  hw: true  })
+  }
+
+  // obs-qsv11.dll — Intel QuickSync; IDs from obs-qsv11.c
+  if (hasDll('obs-qsv11.dll')) {
+    encoders.push({ id: 'obs_qsv11',          label: 'H.264 · Intel QuickSync',  codec: 'h264', hw: true  })
+    encoders.push({ id: 'obs_qsv11_hevc',     label: 'H.265 · Intel QuickSync',  codec: 'h265', hw: true  })
+    encoders.push({ id: 'obs_qsv11_av1',      label: 'AV1  · Intel QuickSync',   codec: 'av1',  hw: true  })
+  }
+
+  // obs_x264 is always the safety net — it ships with every OBS build
+  if (!encoders.find(e => e.id === 'obs_x264')) {
+    encoders.unshift({ id: 'obs_x264',        label: 'H.264 · Software (x264)',  codec: 'h264', hw: false })
   }
 
   return encoders
@@ -86,6 +147,13 @@ class Recorder {
     fs.mkdirSync(dir, { recursive: true })
 
     this._lastError = null
+
+    // resolve the encoder before OBS starts so _preWriteProfile can bake it
+    // into the profile INI — SetProfileParameter for RecEncoder only takes
+    // effect after an OBS restart, so writing the INI first is the only way
+    // to guarantee the right encoder is loaded for this session
+    const encoderId = rec.encoder || 'obs_x264'
+    this._preWriteProfile(encoderId, quality)
 
     try {
       await this._ensureObs()
@@ -140,14 +208,13 @@ class Recorder {
       console.warn('[recorder] Could not persist Video profile params (non-fatal):', e.message)
     }
 
+    // Advanced output mode uses full plugin encoder IDs — Simple mode has its own
+    // short-name list and rejects plugin IDs it doesn't recognise
     await obs.call('SetProfileParameter', {
-      parameterCategory: 'Output', parameterName: 'Mode', parameterValue: 'Simple'
+      parameterCategory: 'Output', parameterName: 'Mode', parameterValue: 'Advanced'
     })
     await obs.call('SetProfileParameter', {
-      parameterCategory: 'SimpleOutput', parameterName: 'FilePath', parameterValue: dir
-    })
-    await obs.call('SetProfileParameter', {
-      parameterCategory: 'SimpleOutput', parameterName: 'RecFormat2', parameterValue: 'mp4'
+      parameterCategory: 'AdvOut', parameterName: 'RecType', parameterValue: 'Standard'
     })
     await obs.call('SetProfileParameter', {
       parameterCategory: 'AdvOut', parameterName: 'RecFilePath', parameterValue: dir
@@ -156,28 +223,23 @@ class Recorder {
       parameterCategory: 'AdvOut', parameterName: 'RecFormat2', parameterValue: 'mp4'
     })
 
-    const legacyMap = { h265: 'obs_ffmpeg_hevc_sw', h264: 'obs_x264' }
-    const encoderId = rec.encoder || legacyMap[codec] || 'obs_ffmpeg_hevc_sw'
+    // keep RecEncoder in sync on disk so the next cold start picks up any
+    // mid-session changes — note: this does NOT change the live encoder object
     await obs.call('SetProfileParameter', {
-      parameterCategory: 'SimpleOutput', parameterName: 'RecEncoder', parameterValue: encoderId
+      parameterCategory: 'AdvOut', parameterName: 'RecEncoder', parameterValue: encoderId
     })
-    try {
-      await obs.call('SetProfileParameter', {
-        parameterCategory: 'SimpleOutput', parameterName: 'RecQuality', parameterValue: 'HQ'
-      })
-    } catch (e) {
-      console.warn('[recorder] Could not set RecQuality (non-fatal):', e.message)
-    }
-    // x265 reads CRF from x264Settings in OBS Simple mode, same as x264
-    if (encoderId === 'obs_x264' || encoderId === 'obs_ffmpeg_hevc_sw') {
+    // for the software x264 encoder, RecRateControl=CRF + RecCRF is the correct
+    // AdvOut Standard way to set quality — RecCustom only works for RecType=FFmpeg
+    if (encoderId === 'obs_x264') {
       try {
         await obs.call('SetProfileParameter', {
-          parameterCategory: 'SimpleOutput',
-          parameterName: 'x264Settings',
-          parameterValue: `crf=${quality}`
+          parameterCategory: 'AdvOut', parameterName: 'RecRateControl', parameterValue: 'CRF'
+        })
+        await obs.call('SetProfileParameter', {
+          parameterCategory: 'AdvOut', parameterName: 'RecCRF', parameterValue: String(quality)
         })
       } catch (e) {
-        console.warn('[recorder] Could not set encoder CRF (non-fatal):', e.message)
+        console.warn('[recorder] Could not set CRF (non-fatal):', e.message)
       }
     }
 
@@ -314,6 +376,44 @@ class Recorder {
     }
   }
 
+  _getProfileBasicIni() {
+    const root      = obsRoot()
+    const cfgDir    = path.join(root, 'config', 'obs-studio')
+    let profileName = 'Untitled'
+    try {
+      const globalIni = path.join(cfgDir, 'global.ini')
+      if (fs.existsSync(globalIni)) {
+        const m = fs.readFileSync(globalIni, 'utf8').match(/^Profile\s*=\s*(.+)$/m)
+        if (m) profileName = m[1].trim()
+      }
+    } catch { /* fall back to Untitled */ }
+    const profileDir = path.join(cfgDir, 'basic', 'profiles', profileName)
+    fs.mkdirSync(profileDir, { recursive: true })
+    return path.join(profileDir, 'basic.ini')
+  }
+
+  _preWriteProfile(encoderId, quality) {
+    try {
+      const iniPath = this._getProfileBasicIni()
+      const updates = {
+        Output: { Mode: 'Advanced' },
+        AdvOut: {
+          RecType:    'Standard',
+          RecEncoder: encoderId,
+          // CRF rate control only applies to the software x264 encoder;
+          // hardware encoders use their own rate control (set through OBS UI)
+          ...(encoderId === 'obs_x264'
+            ? { RecRateControl: 'CRF', RecCRF: String(quality) }
+            : {})
+        }
+      }
+      iniSetKeys(iniPath, updates)
+      console.log('[recorder] Pre-wrote profile INI — encoder:', encoderId)
+    } catch (e) {
+      console.warn('[recorder] Could not pre-write profile INI:', e.message)
+    }
+  }
+
   async _ensureObs() {
     if (this._connected && this._obs) {
       try { await this._obs.call('GetVersion'); return } catch { /* reconnect */ }
@@ -329,6 +429,13 @@ class Recorder {
     }
 
     if (!this._proc) {
+      // pre-write the profile INI *before* OBS spawns — the encoder object is
+      // created at startup from the INI and cannot be changed while OBS runs,
+      // so this must happen here, not just in start()
+      const _s   = store.read('settings', {})
+      const _rec = _s.recording || {}
+      this._preWriteProfile(_rec.encoder || 'obs_x264', _rec.quality ?? 28)
+
       // clear crash sentinel so OBS doesn't show the safe mode dialog on launch
       this._clearCrashSentinel(root)
 

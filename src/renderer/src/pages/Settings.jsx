@@ -283,9 +283,9 @@ function RecordingTab({ settings, onSave, onPatch }) {
   const [fps,           setFps]           = useState(rec.fps || 30)
   // encoder holds the full OBS encoder ID (e.g. 'obs_nvenc_h264_tex').
   // Falls back from legacy 'codec' field when 'encoder' has never been saved.
-  const [encoder,       setEncoder]       = useState(
-    rec.encoder || (rec.codec === 'h265' ? 'obs_ffmpeg_hevc_sw' : rec.codec === 'h264' ? 'obs_x264' : 'obs_ffmpeg_hevc_sw')
-  )
+  // encoder holds the full OBS encoder ID — obs_x264 is the universal fallback
+  // (the old codec field mapped h265 to obs_ffmpeg_hevc_sw which never existed)
+  const [encoder,       setEncoder]       = useState(rec.encoder || 'obs_x264')
   const [quality,       setQuality]       = useState(rec.quality ?? 28)
   const [audioMode,      setAudioMode]      = useState(rec.audioMode || 'system')
   const [sysAudioDevice, setSysAudioDevice] = useState(rec.sysAudioDevice || '')
@@ -582,10 +582,7 @@ function RecordingTab({ settings, onSave, onPatch }) {
             className="w-52 px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 focus:outline-none">
             {noEncoders ? (
               // OBS not yet connected — show static fallback so the dropdown isn't blank
-              <>
-                <option value="obs_x264">H.264 · Software (x264)</option>
-                <option value="obs_ffmpeg_hevc_sw">H.265 · Software (HEVC)</option>
-              </>
+              <option value="obs_x264">H.264 · Software (x264)</option>
             ) : (
               <>
                 {hwEncoders.length > 0 && (
