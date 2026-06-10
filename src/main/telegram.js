@@ -903,7 +903,24 @@ export async function startBot() {
     console.error('[telegram] unhandled handler error:', err.message)
   })
 
+  // bot.launch() rejects when polling dies — catch it so it never becomes an
+  // unhandled rejection. 409 means another instance is still polling; wait 65s
+  // for Telegram's long-poll to expire before retrying. Any other error: 5s retry.
   bot.launch({ dropPendingUpdates: true })
+    .catch(async (e) => {
+      const is409 = /409|conflict/i.test(e.message || '')
+      if (is409) {
+        console.warn('[telegram] polling conflict (409) — another instance running, waiting 65s')
+      } else {
+        console.error('[telegram] polling stopped:', e.message)
+      }
+      try { if (bot) { bot.stop(); bot = null } } catch {}
+      await new Promise(r => setTimeout(r, is409 ? 65000 : 5000))
+      try { await startBot() } catch (retryErr) {
+        console.error('[telegram] restart after polling error failed:', retryErr.message)
+      }
+    })
+
   console.log('[telegram] Bot started')
 
   // heartbeat: if getMe() fails the polling connection has died — restart silently
