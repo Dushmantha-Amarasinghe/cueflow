@@ -169,5 +169,5 @@ If Cueflow saves you time:
 ---
 
 <div align="center">
-Made by <a href="https://dushmantha-amarasinghe.github.io/">Dushmantha Amarasinghe</a> · <a href="https://dushmantha-amarasinghe.github.io/">More apps →</a>
+Made by <a href="https://dushmantha-amarasinghe.github.io/">Dushmantha Amarasinghe</a> · <a href="https://dushmantha-amarasinghe.github.io/">More apps →</a> · <a href="https://ko-fi.com/dushmantha">Buy me a coffee ☕</a>
 </div>
