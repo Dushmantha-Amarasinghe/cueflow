@@ -856,7 +856,7 @@ function AboutTab() {
           </button>
         </SettingRow>
         <SettingRow label="Support" description="If Cueflow saves you time, buy me a coffee">
-          <button onClick={() => window.cueflow?.shell.openExternal('https://www.paypal.com/donate?business=dsbamarasinghe1234@gmail.com&currency_code=USD&amount=5')}
+          <button onClick={() => window.cueflow?.shell.openExternal('https://ko-fi.com/dushmantha')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 hover:text-amber-400 transition-colors">
             <CoffeeIcon /> Buy me a coffee
           </button>

@@ -160,7 +160,7 @@ Pull requests are welcome. For major changes please open an issue first.
 
 If Cueflow saves you time:
 
-[![Buy me a coffee](https://img.shields.io/badge/Buy_me_a_coffee-PayPal-f59e0b?style=flat-square&logo=paypal&logoColor=white)](https://www.paypal.com/donate?business=dsbamarasinghe1234@gmail.com&currency_code=USD&amount=5)
+[![Support on Ko-fi](https://img.shields.io/badge/Support-Ko--fi-FF5E5B?style=flat-square&logo=ko-fi&logoColor=white)](https://ko-fi.com/dushmantha)
 
 ## License
 

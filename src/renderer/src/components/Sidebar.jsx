@@ -72,7 +72,7 @@ export default function Sidebar({ currentPage, onNavigate, status = 'idle', upda
 
         {/* Coffee */}
         <button
-          onClick={() => window.cueflow?.shell.openExternal('https://www.paypal.com/donate?business=dsbamarasinghe1234@gmail.com&currency_code=USD&amount=5')}
+          onClick={() => window.cueflow?.shell.openExternal('https://ko-fi.com/dushmantha')}
           className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-zinc-600 hover:text-amber-400 hover:bg-amber-500/8 transition-colors"
         >
           <CoffeeIcon />
